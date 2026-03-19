@@ -13,7 +13,7 @@
 [![PeerJS](https://img.shields.io/badge/PeerJS-7c3aed?style=flat-square)](https://peerjs.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-[🚀 Canlıya Git](https://cineverse.pages.dev) · [🐛 Hata Bildir](https://github.com/akm096/CineVerse/issues) · [💡 Öneri Sun](https://github.com/akm096/CineVerse/issues)
+[🚀 Canlıya Git](http://cineverse.indevs.in/) · [🐛 Hata Bildir](https://github.com/akm096/CineVerse/issues) · [💡 Öneri Sun](https://github.com/akm096/CineVerse/issues)
 
 </div>
 
