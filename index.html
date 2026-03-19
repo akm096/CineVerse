@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineVerse — Birlikte İzle</title>
+  <meta name="description" content="CineVerse ile arkadaşlarınla birlikte video izle. Senkronizasyon, sohbet ve altyazı desteği.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="navbar-brand">
+        <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" stroke="url(#g)" stroke-width="2"/><polygon points="13,10 23,16 13,22" fill="url(#g)"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs></svg>
+        CineVerse
+      </a>
+      <div class="navbar-actions">
+        <div class="theme-toggle" id="themeToggle" title="Tema Değiştir"></div>
+        <a href="player.html" class="btn btn-primary btn-sm">🎬 İzlemeye Başla</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div>
+      <h1>Birlikte İzle,<br>Birlikte Eğlen</h1>
+      <p>Arkadaşlarınla senkron video izle, sohbet et, altyazı yükle ve paylaş. MP4, M3U8 ve daha fazla format desteği.</p>
+      <div class="hero-actions">
+        <a href="player.html" class="btn btn-primary">🚀 Oda Oluştur</a>
+        <a href="player.html?join=true" class="btn btn-secondary">🔗 Odaya Katıl</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="container">
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <h3>Çoklu Format Desteği</h3>
+        <p>MP4, M3U8/HLS ve daha fazla video formatını doğrudan URL ile oynat.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📝</div>
+        <h3>Altyazı Desteği</h3>
+        <p>SRT, VTT ve JSON altyazı dosyalarını yükle veya URL ile ekle. Boyut, renk ve arka plan ayarları.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Oynatma Hızı</h3>
+        <p>0.25x'ten 3x'e kadar oynatma hızı kontrolü ile istediğin tempoda izle.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👥</div>
+        <h3>Oda Sistemi</h3>
+        <p>Oda oluştur, bağlantıyı paylaş ve arkadaşlarınla birlikte senkron izle.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <h3>Canlı Sohbet</h3>
+        <p>İzlerken emoji destekli canlı sohbet ile arkadaşlarınla iletişimde kal.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎨</div>
+        <h3>Tema Seçenekleri</h3>
+        <p>Açık ve koyu tema arasında geçiş yap. Altyazı görünümünü tamamen özelleştir.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>CineVerse — Kişisel kullanım için. ❤️ ile yapıldı.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle
+    const toggle = document.getElementById('themeToggle');
+    const saved = localStorage.getItem('cv-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    toggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('cv-theme', next);
+    });
+  </script>
+</body>
+</html>

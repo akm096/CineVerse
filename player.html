@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineVerse — Oynatıcı</title>
+  <meta name="description" content="CineVerse video oynatıcı — senkron izle, sohbet et, altyazı yükle.">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- HLS.js for M3U8 streams -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+  <!-- PeerJS for P2P rooms -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <!-- Welcome Modal -->
+  <div class="modal-backdrop" id="welcomeModal">
+    <div class="modal">
+      <h2>🎬 CineVerse'e Hoş Geldin</h2>
+      <p>İzlemeye başlamak için adını yaz ve bir oda oluştur veya mevcut bir odaya katıl.</p>
+      <div class="modal-field">
+        <label for="usernameInput">Kullanıcı Adı</label>
+        <input type="text" id="usernameInput" class="input-field" placeholder="Adını yaz..." maxlength="20">
+      </div>
+      <div class="modal-field" id="joinRoomField" style="display:none">
+        <label for="joinRoomInput">Oda Kodu</label>
+        <input type="text" id="joinRoomInput" class="input-field" placeholder="Oda kodunu yapıştır...">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="createRoomBtn">🚀 Oda Oluştur</button>
+        <button class="btn btn-secondary" id="joinRoomBtn">🔗 Odaya Katıl</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="navbar-brand">
+        <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" stroke="url(#g)" stroke-width="2"/><polygon points="13,10 23,16 13,22" fill="url(#g)"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs></svg>
+        CineVerse
+      </a>
+      <div class="navbar-actions">
+        <div class="theme-toggle" id="themeToggle" title="Tema Değiştir"></div>
+        <span id="currentUser" style="font-size:.85rem;font-weight:600;"></span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- App Layout -->
+  <div class="app-layout">
+    <!-- Video Player Area -->
+    <div class="player-area" id="playerArea">
+      <div class="video-container" id="videoContainer">
+        <video id="videoPlayer" playsinline></video>
+        <div class="subtitle-overlay" id="subtitleOverlay">
+          <span class="subtitle-text" id="subtitleText"></span>
+        </div>
+      </div>
+
+      <!-- Controls Bar -->
+      <div class="controls-bar">
+        <button id="playPauseBtn" title="Oynat / Duraklat">▶️</button>
+        <div class="progress-bar" id="progressBar">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.05" value="1" title="Ses">
+        <button id="muteBtn" title="Sesi Kapat/Aç">🔊</button>
+        <select class="speed-select" id="speedSelect" title="Oynatma Hızı">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.75">1.75x</option>
+          <option value="2">2x</option>
+          <option value="2.5">2.5x</option>
+          <option value="3">3x</option>
+        </select>
+        <button id="fullscreenBtn" title="Tam Ekran">⛶</button>
+      </div>
+
+      <!-- Source Input -->
+      <div class="source-bar">
+        <input type="text" id="videoUrlInput" class="input-field" placeholder="Video URL yapıştır (MP4, M3U8)...">
+        <button class="btn btn-primary btn-sm" id="loadVideoBtn">▶ Yükle</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="chat">💬 Sohbet</button>
+        <button class="sidebar-tab" data-tab="room">👥 Oda</button>
+        <button class="sidebar-tab" data-tab="subtitle">📝 Altyazı</button>
+      </div>
+
+      <!-- Chat Tab -->
+      <div class="tab-panel active" id="tab-chat">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div style="position:relative;">
+          <div class="emoji-picker" id="emojiPicker"></div>
+        </div>
+        <div class="chat-input-area">
+          <button class="emoji-btn" id="emojiBtn" title="Emoji">😊</button>
+          <input type="text" id="chatInput" class="input-field" placeholder="Mesaj yaz..." maxlength="500">
+          <button class="btn btn-primary btn-sm" id="sendChatBtn">Gönder</button>
+        </div>
+      </div>
+
+      <!-- Room Tab -->
+      <div class="tab-panel" id="tab-room">
+        <div class="room-panel">
+          <div class="room-info">
+            <label>Oda Bağlantısı</label>
+            <div class="room-link-box">
+              <input type="text" id="roomLinkInput" class="input-field" readonly>
+              <button class="btn btn-primary btn-sm" id="copyLinkBtn" title="Kopyala">📋</button>
+            </div>
+          </div>
+          <div class="room-info" style="margin-top:12px;" id="roomSettingsPanel">
+            <label>⚙️ Oda Ayarları</label>
+            <div class="setting-row" style="margin-top:8px;">
+              <label>Sadece host video değiştirebilir</label>
+              <div class="toggle-switch active" id="hostOnlyVideo"></div>
+            </div>
+            <div class="setting-row">
+              <label>Sadece host oynatmayı kontrol edebilir</label>
+              <div class="toggle-switch" id="hostOnlyPlayback"></div>
+            </div>
+            <div class="setting-row">
+              <label>🔔 Bildirim sesi</label>
+              <div class="toggle-switch active" id="notifSoundToggle"></div>
+            </div>
+          </div>
+          <div class="room-info" style="margin-top:12px;">
+            <label>Oda Üyeleri</label>
+            <ul class="user-list" id="userList"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtitle Tab -->
+      <div class="tab-panel" id="tab-subtitle">
+        <div class="subtitle-panel">
+          <!-- Subtitle URL input -->
+          <div class="settings-group">
+            <h4>📎 Altyazı URL</h4>
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="subtitleUrlInput" class="input-field" placeholder="Altyazı URL yapıştır (.srt, .vtt)..." style="flex:1;font-size:.82rem;padding:8px 12px;">
+              <button class="btn btn-primary btn-sm" id="loadSubUrlBtn">Yükle</button>
+            </div>
+          </div>
+
+          <!-- Subtitle file upload -->
+          <div class="settings-group">
+            <h4>📁 Dosyadan Yükle</h4>
+            <div class="subtitle-upload" id="subtitleUpload">
+              <div class="upload-icon">📄</div>
+              <p>Altyazı dosyasını<br>sürükle-bırak veya tıkla<br><small>SRT, VTT, JSON</small></p>
+            </div>
+            <input type="file" id="subtitleFileInput" accept=".srt,.vtt,.json,.ass" style="display:none">
+            <p id="subtitleFileName" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;text-align:center;"></p>
+          </div>
+
+          <!-- Subtitle Appearance -->
+          <div class="settings-group">
+            <h4>🎨 Altyazı Görünümü</h4>
+            <div class="setting-row">
+              <label>Yazı Boyutu</label>
+              <input type="range" id="subFontSize" min="12" max="48" value="22">
+            </div>
+            <div class="setting-row">
+              <label>Yazı Rengi</label>
+              <input type="color" id="subFontColor" value="#ffffff">
+            </div>
+            <div class="setting-row">
+              <label>Arka Plan</label>
+              <div class="toggle-switch active" id="subBgToggle"></div>
+            </div>
+            <div class="setting-row">
+              <label>Arka Plan Rengi</label>
+              <input type="color" id="subBgColor" value="#000000">
+            </div>
+            <div class="setting-row">
+              <label>Arka Plan Opaklığı</label>
+              <input type="range" id="subBgOpacity" min="0" max="100" value="70">
+            </div>
+            <div class="setting-row">
+              <label>Altyazı Konumu</label>
+              <select id="subPosition">
+                <option value="bottom">Alt</option>
+                <option value="top">Üst</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" id="clearSubBtn" style="width:100%;justify-content:center;">🗑️ Altyazıyı Temizle</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/subtitles.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
