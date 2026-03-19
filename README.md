@@ -48,7 +48,7 @@
 
 ### Hızlı Başlangıç
 
-1. Siteye git: **[cineverse.indevs.in](cineverse.indevs.in)**
+1. Siteye git: **[cineverse.indevs.in](http://cineverse.indevs.in)**
 2. Kullanıcı adını yaz ve **"Oda Oluştur"** düğmesine tıkla
 3. Video URL'yi yapıştır (MP4 veya M3U8 linki)
 4. Oda bağlantısını kopyalayıp arkadaşlarına gönder
