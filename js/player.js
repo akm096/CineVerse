@@ -131,7 +131,23 @@ const PlayerController = (() => {
   }
 
   /**
-   * Load a video URL (auto-detects MP4 vs M3U8)
+   * Extract Google Drive file ID from various URL formats
+   */
+  function extractGDriveId(url) {
+    // https://drive.google.com/file/d/FILE_ID/view
+    let match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    // https://drive.google.com/open?id=FILE_ID
+    match = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    // https://drive.google.com/uc?id=FILE_ID
+    match = url.match(/drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    return null;
+  }
+
+  /**
+   * Load a video URL (auto-detects MP4, M3U8, Google Drive)
    */
   function loadSource(url) {
     // Destroy old HLS instance
@@ -141,7 +157,25 @@ const PlayerController = (() => {
     }
     isHLS = false;
 
+    // Hide iframe, show video
+    const gdriveFrame = document.getElementById('gdriveFrame');
+    gdriveFrame.style.display = 'none';
+    video.style.display = '';
+
     if (!url) return;
+
+    // Google Drive detection
+    const gdriveId = extractGDriveId(url);
+    if (gdriveId) {
+      loadGDrive(gdriveId);
+      return;
+    }
+
+    // Embed player detection (Abyss.to / Hydrax / custom domains)
+    if (isEmbedPlayer(url)) {
+      embedInIframe(url, 'Video oynatıcı yükleniyor... 🎬');
+      return;
+    }
 
     const isM3U8 = url.includes('.m3u8') || url.includes('m3u8');
 
@@ -163,14 +197,57 @@ const PlayerController = (() => {
         }
       });
     } else if (isM3U8 && video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari native HLS
       video.src = url;
       video.play().catch(() => {});
     } else {
-      // Direct MP4 or other
+      // Try as direct video source (MP4 etc)
       video.src = url;
       video.play().catch(() => {});
     }
+  }
+
+  /**
+   * Load Google Drive video — uses iframe embed directly
+   * (Direct streaming hits Google's quota limits and virus scan blocks)
+   */
+  function loadGDrive(fileId) {
+    const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    embedInIframe(embedUrl, 'Google Drive videosu yükleniyor... 📂');
+  }
+
+  /**
+   * Detect if URL is an embed player (Abyss.to / Hydrax / custom domains)
+   * — Known domains: abyss.to, abysscdn.com, playhydrax.com
+   * — ?v= parameter pattern (Hydrax format on ANY custom domain)
+   * — Any iframe/embed URL that isn't a direct video file
+   */
+  function isEmbedPlayer(url) {
+    // Known Hydrax/Abyss domains
+    if (/abysscdn\.com|playhydrax\.com|abyss\.to/i.test(url)) return true;
+    
+    // ?v= parameter pattern (Hydrax custom domain format)
+    // e.g. https://wojocuk.indevs.in/?v=DoKG5c5Ep
+    // e.g. https://anything.example.com/?v=XXXX
+    if (/\?v=[a-zA-Z0-9]+/.test(url)) {
+      // Make sure it's not a YouTube/known video URL with ?v= 
+      if (/youtube\.com|youtu\.be/.test(url)) return false;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Generic: embed any URL in the iframe player
+   */
+  function embedInIframe(embedUrl, toastMsg) {
+    const gdriveFrame = document.getElementById('gdriveFrame');
+    video.style.display = 'none';
+    video.src = '';
+    video.pause();
+    gdriveFrame.src = embedUrl;
+    gdriveFrame.style.display = 'block';
+    showToast(toastMsg || 'Video yükleniyor... 🎬');
   }
 
   /**
