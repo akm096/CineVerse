@@ -13,7 +13,7 @@
 [![PeerJS](https://img.shields.io/badge/PeerJS-7c3aed?style=flat-square)](https://peerjs.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-[🚀 Canlıya Git](http://cineverse.indevs.in/) · [🐛 Hata Bildir](https://github.com/akm096/CineVerse/issues) · [💡 Öneri Sun](https://github.com/akm096/CineVerse/issues)
+[🚀 Canlıya Git](https://cineverse.indevs.in/) · [🐛 Hata Bildir](https://github.com/akm096/CineVerse/issues) · [💡 Öneri Sun](https://github.com/akm096/CineVerse/issues)
 
 </div>
 
@@ -48,7 +48,7 @@
 
 ### Hızlı Başlangıç
 
-1. Siteye git: **[cineverse.indevs.in](http://cineverse.indevs.in)**
+1. Siteye git: **[cineverse.indevs.in](https://cineverse.indevs.in)**
 2. Kullanıcı adını yaz ve **"Oda Oluştur"** düğmesine tıkla
 3. Video URL'yi yapıştır (MP4 veya M3U8 linki)
 4. Oda bağlantısını kopyalayıp arkadaşlarına gönder
