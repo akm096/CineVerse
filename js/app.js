@@ -285,9 +285,19 @@
           if (data.videoUrl) {
             document.getElementById('videoUrlInput').value = data.videoUrl;
             PlayerController.loadSource(data.videoUrl);
+            // YouTube needs more time to load — retry sync until ready
+            const isYT = /youtube\.com|youtu\.be/.test(data.videoUrl);
+            const syncDelay = isYT ? 3000 : 1000;
+            const syncAction = data.paused ? 'pause' : 'play';
             setTimeout(() => {
-              PlayerController.applySync(data.paused ? 'pause' : 'play', data.currentTime);
-            }, 1000);
+              PlayerController.applySync(syncAction, data.currentTime);
+            }, syncDelay);
+            // For YouTube: retry once more after 5s in case first attempt was too early
+            if (isYT) {
+              setTimeout(() => {
+                PlayerController.applySync(syncAction, data.currentTime);
+              }, 6000);
+            }
           }
         }
         if (data.type === 'users') {
