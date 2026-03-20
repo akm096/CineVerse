@@ -30,6 +30,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare web assets
+        run: |
+          mkdir -p www/css www/js www/functions
+          cp index.html www/
+          cp player.html www/
+          cp -r css/* www/css/
+          cp -r js/* www/js/
+          cp -r functions/* www/functions/
+          cp gdrive-worker.js www/ 2>/dev/null || true
+
       - name: Add Android platform
         run: npx cap add android
 
