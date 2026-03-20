@@ -3,6 +3,35 @@
  * Room management (PeerJS), theme toggle, subtitle settings, wiring
  * Full bidirectional sync: play/pause/seek/speed/video/subtitles
  */
+
+// ICE Server configuration for WebRTC (STUN + TURN)
+// Required for connections across different networks/NATs
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ],
+  iceTransportPolicy: 'all'
+};
 (() => {
   // ===== State =====
   let username = '';
@@ -154,7 +183,7 @@
     roomId = generateRoomId();
     users = [{ name: username, peerId: roomId }];
 
-    peer = new Peer(roomId);
+    peer = new Peer(roomId, { config: ICE_SERVERS, debug: 1 });
 
     peer.on('open', (id) => {
       roomId = id;
@@ -261,87 +290,33 @@
     // Guest loaded subtitle (not used — only host sends subtitles)
   }
 
+  let joinRetryCount = 0;
+  const MAX_JOIN_RETRIES = 2;
+
   function joinRoom(hostId) {
     isHost = false;
     roomId = hostId;
 
-    peer = new Peer();
+    showToast('Odaya bağlanılıyor... ⏳');
+
+    peer = new Peer(undefined, { config: ICE_SERVERS, debug: 1 });
 
     peer.on('open', () => {
-      const conn = peer.connect(hostId, { reliable: true });
-      connections = [conn];
-
-      conn.on('open', () => {
-        conn.send({ type: 'join', name: username });
-        updateRoomUI();
-      });
-
-      conn.on('data', (data) => {
-        if (data.type === 'init') {
-          users = data.users;
-          updateUserList();
-          if (data.settings) applyRoomSettings(data.settings);
-          if (data.speed) PlayerController.setSpeed(data.speed);
-          if (data.videoUrl) {
-            document.getElementById('videoUrlInput').value = data.videoUrl;
-            PlayerController.loadSource(data.videoUrl);
-            // YouTube needs more time to load — retry sync until ready
-            const isYT = /youtube\.com|youtu\.be/.test(data.videoUrl);
-            const syncDelay = isYT ? 3000 : 1000;
-            const syncAction = data.paused ? 'pause' : 'play';
-            setTimeout(() => {
-              PlayerController.applySync(syncAction, data.currentTime);
-            }, syncDelay);
-            // For YouTube: retry once more after 5s in case first attempt was too early
-            if (isYT) {
-              setTimeout(() => {
-                PlayerController.applySync(syncAction, data.currentTime);
-              }, 6000);
-            }
-          }
-        }
-        if (data.type === 'users') {
-          users = data.users;
-          updateUserList();
-        }
-        if (data.type === 'sync') {
-          PlayerController.applySync(data.action, data.time);
-        }
-        if (data.type === 'chat') {
-          ChatModule.displayMessage(data.name, data.text, data.system, true);
-        }
-        if (data.type === 'video') {
-          document.getElementById('videoUrlInput').value = data.url;
-          PlayerController.loadSource(data.url);
-        }
-        if (data.type === 'settings') {
-          applyRoomSettings(data.settings);
-        }
-        if (data.type === 'subtitle-data') {
-          // Host shared subtitles
-          const count = SubtitleEngine.load(data.text, data.filename);
-          document.getElementById('subtitleFileName').textContent = `✅ ${data.filename} (${count} satır) — Host tarafından`;
-          showToast(`Host altyazı paylaştı: ${count} satır 📝`);
-        }
-        if (data.type === 'subtitle-clear') {
-          SubtitleEngine.clear();
-          document.getElementById('subtitleText').textContent = '';
-          document.getElementById('subtitleFileName').textContent = '';
-          showToast('Host altyazıyı temizledi');
-        }
-        if (data.type === 'toast') {
-          showToast(data.msg);
-        }
-      });
-
-      conn.on('close', () => {
-        ChatModule.displayMessage('', 'Bağlantı koptu!', true);
-      });
+      console.log('PeerJS connected, my id:', peer.id);
+      connectToHost(hostId);
     });
 
     peer.on('error', (err) => {
       console.error('Peer error:', err);
-      showToast('Odaya bağlanılamadı!');
+      if (err.type === 'peer-unavailable') {
+        showToast('Oda bulunamadı! Oda kodu yanlış veya host çevrimdışı. ❌');
+      } else if (err.type === 'network') {
+        showToast('Ağ hatası! İnternet bağlantınızı kontrol edin. ❌');
+      } else if (err.type === 'server-error') {
+        showToast('Sunucu hatası! Biraz bekleyip tekrar deneyin. ❌');
+      } else {
+        showToast('Bağlantı hatası: ' + (err.type || err.message) + ' ❌');
+      }
     });
 
     // GUEST: player actions → send to HOST as guest-sync
@@ -359,6 +334,108 @@
       }
     });
   }
+
+  function connectToHost(hostId) {
+    const conn = peer.connect(hostId, { reliable: true });
+    connections = [conn];
+
+    // Connection timeout — if not connected in 15s, retry
+    const connTimeout = setTimeout(() => {
+      if (!conn.open) {
+        console.warn('Connection timeout, attempt', joinRetryCount + 1);
+        conn.close();
+        if (joinRetryCount < MAX_JOIN_RETRIES) {
+          joinRetryCount++;
+          showToast(`Bağlantı zaman aşımı, tekrar deneniyor (${joinRetryCount}/${MAX_JOIN_RETRIES})... ⏳`);
+          connectToHost(hostId);
+        } else {
+          showToast('Odaya bağlanılamadı! Host çevrimdışı olabilir veya ağ engelliyor. ❌');
+          joinRetryCount = 0;
+        }
+      }
+    }, 15000);
+
+    conn.on('open', () => {
+      clearTimeout(connTimeout);
+      joinRetryCount = 0;
+      console.log('Connected to host!');
+      showToast('Odaya bağlandı! ✅');
+      conn.send({ type: 'join', name: username });
+      updateRoomUI();
+    });
+
+    conn.on('data', (data) => {
+      if (data.type === 'init') {
+        users = data.users;
+        updateUserList();
+        if (data.settings) applyRoomSettings(data.settings);
+        if (data.speed) PlayerController.setSpeed(data.speed);
+        if (data.videoUrl) {
+          document.getElementById('videoUrlInput').value = data.videoUrl;
+          PlayerController.loadSource(data.videoUrl);
+          // YouTube needs more time to load — retry sync until ready
+          const isYT = /youtube\.com|youtu\.be/.test(data.videoUrl);
+          const syncDelay = isYT ? 3000 : 1000;
+          const syncAction = data.paused ? 'pause' : 'play';
+          setTimeout(() => {
+            PlayerController.applySync(syncAction, data.currentTime);
+          }, syncDelay);
+          // For YouTube: retry once more after 5s in case first attempt was too early
+          if (isYT) {
+            setTimeout(() => {
+              PlayerController.applySync(syncAction, data.currentTime);
+            }, 6000);
+          }
+        }
+      }
+      if (data.type === 'users') {
+        users = data.users;
+        updateUserList();
+      }
+      if (data.type === 'sync') {
+        PlayerController.applySync(data.action, data.time);
+      }
+      if (data.type === 'chat') {
+        ChatModule.displayMessage(data.name, data.text, data.system, true);
+      }
+      if (data.type === 'video') {
+        document.getElementById('videoUrlInput').value = data.url;
+        PlayerController.loadSource(data.url);
+      }
+      if (data.type === 'settings') {
+        applyRoomSettings(data.settings);
+      }
+      if (data.type === 'subtitle-data') {
+        // Host shared subtitles
+        const count = SubtitleEngine.load(data.text, data.filename);
+        document.getElementById('subtitleFileName').textContent = `✅ ${data.filename} (${count} satır) — Host tarafından`;
+        showToast(`Host altyazı paylaştı: ${count} satır 📝`);
+      }
+      if (data.type === 'subtitle-clear') {
+        SubtitleEngine.clear();
+        document.getElementById('subtitleText').textContent = '';
+        document.getElementById('subtitleFileName').textContent = '';
+        showToast('Host altyazıyı temizledi');
+      }
+      if (data.type === 'toast') {
+        showToast(data.msg);
+      }
+    });
+
+    conn.on('close', () => {
+      ChatModule.displayMessage('', 'Bağlantı koptu! Yeniden bağlanılıyor...', true);
+      showToast('Bağlantı koptu! Yeniden deneniyor... ⏳');
+      // Auto-reconnect after 3 seconds
+      setTimeout(() => {
+        if (peer && !peer.destroyed) {
+          joinRetryCount = 0;
+          connectToHost(hostId);
+        }
+      }, 3000);
+    });
+  }
+
+
 
   function broadcast(data) {
     connections.forEach(conn => {
