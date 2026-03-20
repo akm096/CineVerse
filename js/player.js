@@ -207,12 +207,18 @@ const PlayerController = (() => {
   }
 
   /**
-   * Load Google Drive video — uses iframe embed directly
-   * (Direct streaming hits Google's quota limits and virus scan blocks)
+   * Load Google Drive video via Cloudflare Worker proxy
+   * Converts GDrive link → proxy MP4 stream → full sync support
    */
+  const GDRIVE_PROXY = 'https://gdrive-proxy.qsp7mdjbcy.workers.dev';
+
   function loadGDrive(fileId) {
-    const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-    embedInIframe(embedUrl, 'Google Drive videosu yükleniyor... 📂');
+    const proxyUrl = `${GDRIVE_PROXY}/?id=${fileId}`;
+    showToast('Google Drive videosu proxy ile yükleniyor... 📂');
+    
+    // Load as direct MP4 — full player controls + sync work
+    video.src = proxyUrl;
+    video.play().catch(() => {});
   }
 
   /**
