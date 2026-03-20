@@ -1,7 +1,7 @@
 {
   "appId": "com.cineverse.app",
   "appName": "CineVerse",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https",
     "allowNavigation": ["*"]
