@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Capacitor Android build outputs
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,13 @@
+{
+  "appId": "com.cineverse.app",
+  "appName": "CineVerse",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true
+  }
+}
