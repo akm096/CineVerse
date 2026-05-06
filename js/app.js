@@ -40,6 +40,7 @@ const ICE_SERVERS = {
   let peer = null;
   let connections = [];  // host: array of DataConnection; guest: [hostConn]
   let users = [];        // {name, peerId}
+  let syncHeartbeatTimer = null;
 
   // Room settings (host-controlled)
   let roomSettings = {
@@ -180,6 +181,7 @@ const ICE_SERVERS = {
 
   function startAsHost() {
     isHost = true;
+    stopSyncHeartbeat();
     roomId = generateRoomId();
     users = [{ name: username, peerId: roomId }];
 
@@ -190,6 +192,7 @@ const ICE_SERVERS = {
       updateRoomUI();
       ChatModule.displayMessage('', `${username} odayı oluşturdu`, true);
       updateUserList();
+      startSyncHeartbeat();
     });
 
     peer.on('connection', (conn) => {
@@ -307,6 +310,7 @@ const ICE_SERVERS = {
 
   function joinRoom(hostId) {
     isHost = false;
+    stopSyncHeartbeat();
     roomId = hostId;
 
     showToast('Odaya bağlanılıyor... ⏳');
@@ -414,6 +418,9 @@ const ICE_SERVERS = {
       if (data.type === 'sync') {
         PlayerController.applySync(data.action, data.time);
       }
+      if (data.type === 'sync-state') {
+        PlayerController.smoothSyncTo(data.time, data.paused, data.speed, data.sentAt);
+      }
       if (data.type === 'chat') {
         ChatModule.displayMessage(data.name, data.text, data.system, true, null, data.reply);
       }
@@ -463,6 +470,28 @@ const ICE_SERVERS = {
     connections.forEach(conn => {
       if (conn.open) conn.send(data);
     });
+  }
+
+  function startSyncHeartbeat() {
+    stopSyncHeartbeat();
+    syncHeartbeatTimer = setInterval(() => {
+      if (!isHost || PlayerController.isPaused()) return;
+
+      broadcast({
+        type: 'sync-state',
+        time: PlayerController.getCurrentTime(),
+        paused: PlayerController.isPaused(),
+        speed: PlayerController.getSpeed(),
+        sentAt: Date.now()
+      });
+    }, 1500);
+  }
+
+  function stopSyncHeartbeat() {
+    if (syncHeartbeatTimer) {
+      clearInterval(syncHeartbeatTimer);
+      syncHeartbeatTimer = null;
+    }
   }
 
   function updateRoomUI() {
@@ -537,6 +566,8 @@ const ICE_SERVERS = {
     const subUrlInput = document.getElementById('subtitleUrlInput');
     const clearBtn = document.getElementById('clearSubBtn');
 
+    subUrlInput.placeholder = 'Altyazi URL veya GitHub raw/blob linki yapistir (.srt, .vtt, .json)';
+
     uploadArea.addEventListener('click', () => fileInput.click());
 
     uploadArea.addEventListener('dragover', (e) => {
@@ -596,14 +627,16 @@ const ICE_SERVERS = {
 
   function loadSubtitleFromURL(url) {
     showToast('Altyazı indiriliyor...');
-    fetch(url)
+    const subtitleUrl = normalizeSubtitleUrl(url);
+
+    fetch(subtitleUrl)
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.arrayBuffer();
       })
       .then(buffer => {
         const text = decodeSubtitleBuffer(buffer);
-        const filename = url.split('/').pop().split('?')[0];
+        const filename = getSubtitleFilename(url, subtitleUrl);
         const count = SubtitleEngine.load(text, filename);
         document.getElementById('subtitleFileName').textContent = `✅ ${filename} (${count} satır)`;
         showToast(`Altyazı yüklendi: ${count} satır 📝`);
@@ -619,6 +652,48 @@ const ICE_SERVERS = {
         console.error('Subtitle URL error:', err);
         showToast('Altyazı yüklenemedi! ❌');
       });
+  }
+
+  function normalizeSubtitleUrl(url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'github.com') {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        const blobIndex = parts.indexOf('blob');
+        const rawIndex = parts.indexOf('raw');
+        const fileIndex = blobIndex === 2 ? blobIndex : rawIndex;
+        if (parts.length >= 5 && fileIndex === 2) {
+          const owner = parts[0];
+          const repo = parts[1];
+          const branch = parts[3];
+          const path = parts.slice(4).join('/');
+          return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+        }
+      }
+
+      if (parsed.hostname === 'raw.github.com') {
+        parsed.hostname = 'raw.githubusercontent.com';
+        return parsed.toString();
+      }
+    } catch (err) {
+      // Fetch will show the original URL error.
+    }
+
+    return url;
+  }
+
+  function getSubtitleFilename(originalUrl, loadedUrl) {
+    try {
+      const originalPath = new URL(originalUrl).pathname;
+      const parts = originalPath.split('/').filter(Boolean);
+      const blobIndex = parts.indexOf('blob');
+      const filename = blobIndex === 2 ? parts.slice(4).pop() : parts.pop();
+      if (filename) return decodeURIComponent(filename);
+    } catch (err) {
+      // Fallback below.
+    }
+
+    return loadedUrl.split('/').pop().split('?')[0] || 'subtitle.srt';
   }
 
   function decodeSubtitleBuffer(buffer) {

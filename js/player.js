@@ -6,6 +6,10 @@ const PlayerController = (() => {
   let video, hlsInstance;
   let isHLS = false;
   let onSyncCallback = null; // called when user does play/pause/seek
+  let userPlaybackRate = 1;
+  let syncCorrectionTimer = null;
+  let syncStatusTimer = null;
+  let syncStatusEl = null;
 
   // YouTube state
   let ytPlayer = null;
@@ -101,6 +105,7 @@ const PlayerController = (() => {
     // Speed
     speedSelect.addEventListener('change', () => {
       const rate = parseFloat(speedSelect.value);
+      userPlaybackRate = rate;
       if (isYouTube && ytPlayer && ytReady) {
         ytPlayer.setPlaybackRate(rate);
       } else {
@@ -387,7 +392,10 @@ const PlayerController = (() => {
 
   function onYTRateChange(event) {
     const rate = event.data;
-    document.getElementById('speedSelect').value = rate;
+    const speedSelect = document.getElementById('speedSelect');
+    if ([...speedSelect.options].some(option => Number(option.value) === rate)) {
+      speedSelect.value = rate;
+    }
   }
 
   function onYTError(event) {
@@ -606,6 +614,7 @@ const PlayerController = (() => {
     }
 
     if (action === 'speed') {
+      userPlaybackRate = time;
       video.playbackRate = time;
       document.getElementById('speedSelect').value = time;
       return;
@@ -625,6 +634,7 @@ const PlayerController = (() => {
     const playPauseBtn = document.getElementById('playPauseBtn');
 
     if (action === 'speed') {
+      userPlaybackRate = time;
       ytPlayer.setPlaybackRate(time);
       document.getElementById('speedSelect').value = time;
       return;
@@ -652,12 +662,110 @@ const PlayerController = (() => {
   }
 
   function setSpeed(rate) {
+    userPlaybackRate = rate;
     if (isYouTube && ytPlayer && ytReady) {
       ytPlayer.setPlaybackRate(rate);
     } else {
       video.playbackRate = rate;
     }
     document.getElementById('speedSelect').value = rate;
+  }
+
+  function smoothSyncTo(remoteTime, remotePaused, remoteRate, sentAt) {
+    if (remotePaused || isPaused()) {
+      resetSyncCorrection();
+      return;
+    }
+
+    const baseRate = Number.isFinite(remoteRate) && remoteRate > 0 ? remoteRate : userPlaybackRate;
+    const elapsed = Number.isFinite(sentAt) ? Math.max(0, (Date.now() - sentAt) / 1000) : 0;
+    const targetTime = remoteTime + (elapsed * baseRate);
+    const localTime = getCurrentTime();
+    const drift = targetTime - localTime;
+    const absDrift = Math.abs(drift);
+
+    if (!Number.isFinite(targetTime) || absDrift < 0.25) {
+      resetSyncCorrection();
+      return;
+    }
+
+    if (absDrift > 4) {
+      applySync('seek', targetTime);
+      resetSyncCorrection();
+      showSyncStatus('Senkron düzəldildi');
+      return;
+    }
+
+    const correctionRate = getCorrectionRate(baseRate, drift);
+    applyTemporaryRate(correctionRate);
+    showSyncStatus('Senkron düzəldilir');
+
+    if (syncCorrectionTimer) clearTimeout(syncCorrectionTimer);
+    syncCorrectionTimer = setTimeout(() => {
+      const newDrift = targetTime - getCurrentTime();
+      if (Math.abs(newDrift) < 0.35) resetSyncCorrection();
+    }, 1400);
+  }
+
+  function getCorrectionRate(baseRate, drift) {
+    if (drift > 1.5) return Math.min(baseRate * 1.08, 3);
+    if (drift > 0) return Math.min(baseRate * 1.04, 3);
+    if (drift < -1.5) return Math.max(baseRate * 0.92, 0.25);
+    return Math.max(baseRate * 0.96, 0.25);
+  }
+
+  function applyTemporaryRate(rate) {
+    if (isYouTube && ytPlayer && ytReady) {
+      const supported = ytPlayer.getAvailablePlaybackRates ? ytPlayer.getAvailablePlaybackRates() : [0.25, 0.5, 1, 1.25, 1.5, 2];
+      const sorted = supported.slice().sort((a, b) => a - b);
+      if (rate > userPlaybackRate) {
+        ytPlayer.setPlaybackRate(sorted.find(item => item > userPlaybackRate) || sorted[sorted.length - 1]);
+      } else if (rate < userPlaybackRate) {
+        ytPlayer.setPlaybackRate(sorted.slice().reverse().find(item => item < userPlaybackRate) || sorted[0]);
+      } else {
+        ytPlayer.setPlaybackRate(rate);
+      }
+      return;
+    }
+
+    video.playbackRate = rate;
+  }
+
+  function resetSyncCorrection() {
+    if (syncCorrectionTimer) {
+      clearTimeout(syncCorrectionTimer);
+      syncCorrectionTimer = null;
+    }
+
+    if (Math.abs(getSpeed() - userPlaybackRate) > 0.01) {
+      applyTemporaryRate(userPlaybackRate);
+    }
+    hideSyncStatusSoon();
+  }
+
+  function ensureSyncStatus() {
+    if (syncStatusEl) return syncStatusEl;
+
+    syncStatusEl = document.createElement('div');
+    syncStatusEl.className = 'sync-status';
+    syncStatusEl.setAttribute('aria-live', 'polite');
+    document.getElementById('videoContainer').appendChild(syncStatusEl);
+    return syncStatusEl;
+  }
+
+  function showSyncStatus(message) {
+    const el = ensureSyncStatus();
+    el.textContent = message;
+    el.classList.add('show');
+    if (syncStatusTimer) clearTimeout(syncStatusTimer);
+  }
+
+  function hideSyncStatusSoon() {
+    if (!syncStatusEl) return;
+    if (syncStatusTimer) clearTimeout(syncStatusTimer);
+    syncStatusTimer = setTimeout(() => {
+      syncStatusEl.classList.remove('show');
+    }, 1200);
   }
 
   function getSpeed() {
@@ -696,5 +804,5 @@ const PlayerController = (() => {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
 
-  return { init, loadSource, applySync, onSync, getCurrentTime, isPaused, setSpeed, getSpeed };
+  return { init, loadSource, applySync, onSync, getCurrentTime, isPaused, setSpeed, getSpeed, smoothSyncTo };
 })();

@@ -365,6 +365,29 @@ button, input, select, textarea {
 }
 .subtitle-text:empty { display: none; }
 
+.sync-status {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .72);
+  color: #fff;
+  font-size: .84rem;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 12;
+  transition: opacity .2s, transform .2s;
+}
+
+.sync-status.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 /* Video Controls Bar */
 .controls-bar {
   display: flex;
