@@ -556,6 +556,12 @@ button, input, select, textarea {
   display: flex;
   gap: 10px;
   animation: fadeIn .3s;
+  max-width: 86%;
+  align-self: flex-start;
+}
+.chat-msg.own {
+  align-self: flex-end;
+  justify-content: flex-end;
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
@@ -576,6 +582,10 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: flex-start;
+}
+.chat-msg.own .chat-msg-body {
+  align-items: flex-end;
 }
 .chat-msg-name {
   font-weight: 600;
@@ -588,13 +598,23 @@ button, input, select, textarea {
   position: relative;
   width: fit-content;
   max-width: 100%;
-  padding-right: 4px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+.chat-msg.own .chat-message-item {
+  background: rgba(124, 58, 237, .22);
+  border: 1px solid rgba(167, 139, 250, .18);
 }
 .chat-msg-meta {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 2px;
+  justify-content: flex-start;
+}
+.chat-msg.own .chat-msg-meta {
+  justify-content: flex-end;
 }
 .chat-msg-time { font-size: .7rem; color: var(--text-muted); }
 .chat-reply-action {

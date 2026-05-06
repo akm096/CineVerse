@@ -218,7 +218,7 @@ const ChatModule = (() => {
    * Display a chat message
    * @param {boolean} playSound - whether to play notification sound (for incoming messages)
    */
-  function displayMessage(name, text, isSystem = false, playSound = false, image = null, reply = null) {
+  function displayMessage(name, text, isSystem = false, playSound = false, image = null, reply = null, isOwn = false) {
     const container = document.getElementById('chatMessages');
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -231,17 +231,18 @@ const ChatModule = (() => {
       container.appendChild(div);
     } else {
       const message = createMessageItem(name, text, image, reply, timeStr);
-      if (lastMessageGroup && lastMessageGroup.dataset.name === name) {
+      if (lastMessageGroup && lastMessageGroup.dataset.name === name && lastMessageGroup.dataset.own === String(isOwn)) {
         lastMessageGroup.querySelector('.chat-msg-body').appendChild(message);
       } else {
         const initial = name.charAt(0).toUpperCase();
         const div = document.createElement('div');
-        div.className = 'chat-msg';
+        div.className = isOwn ? 'chat-msg own' : 'chat-msg';
         div.dataset.name = name;
+        div.dataset.own = String(isOwn);
         div.innerHTML = `
-          <div class="chat-msg-avatar">${escapeHTML(initial)}</div>
+          ${isOwn ? '' : `<div class="chat-msg-avatar">${escapeHTML(initial)}</div>`}
           <div class="chat-msg-body">
-            <div class="chat-msg-name">${escapeHTML(name)}</div>
+            ${isOwn ? '' : `<div class="chat-msg-name">${escapeHTML(name)}</div>`}
           </div>
         `;
         div.querySelector('.chat-msg-body').appendChild(message);

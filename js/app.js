@@ -222,12 +222,12 @@ const ICE_SERVERS = {
 
     // Chat send
     ChatModule.onSend((text, reply) => {
-      ChatModule.displayMessage(username, text, false, false, null, reply);
+      ChatModule.displayMessage(username, text, false, false, null, reply, true);
       broadcast({ type: 'chat', name: username, text, reply });
     });
 
     ChatModule.onImageSend((image, reply) => {
-      ChatModule.displayMessage(username, '', false, false, image, reply);
+      ChatModule.displayMessage(username, '', false, false, image, reply, true);
       broadcast({ type: 'chat-image', name: username, image, reply });
     });
   }
@@ -340,14 +340,14 @@ const ICE_SERVERS = {
 
     // Chat send
     ChatModule.onSend((text, reply) => {
-      ChatModule.displayMessage(username, text, false, false, null, reply);
+      ChatModule.displayMessage(username, text, false, false, null, reply, true);
       if (connections[0] && connections[0].open) {
         connections[0].send({ type: 'chat', name: username, text, reply });
       }
     });
 
     ChatModule.onImageSend((image, reply) => {
-      ChatModule.displayMessage(username, '', false, false, image, reply);
+      ChatModule.displayMessage(username, '', false, false, image, reply, true);
       if (connections[0] && connections[0].open) {
         connections[0].send({ type: 'chat-image', name: username, image, reply });
       }
