@@ -25,10 +25,14 @@ const PlayerController = (() => {
     const muteBtn = document.getElementById('muteBtn');
     const speedSelect = document.getElementById('speedSelect');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const rewind5Btn = document.getElementById('rewind5Btn');
+    const forward10Btn = document.getElementById('forward10Btn');
     const videoContainer = document.getElementById('videoContainer');
 
     // Play / Pause
     playPauseBtn.addEventListener('click', togglePlay);
+    rewind5Btn.addEventListener('click', () => seekBy(-5));
+    forward10Btn.addEventListener('click', () => seekBy(10));
     videoContainer.addEventListener('click', (e) => {
       // Don't toggle on YT iframe click (YouTube handles it internally)
       if (isYouTube) return;
@@ -128,13 +132,11 @@ const PlayerController = (() => {
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          video.currentTime = Math.max(0, video.currentTime - 5);
-          emitSync('seek', video.currentTime);
+          seekBy(-5);
           break;
         case 'ArrowRight':
           e.preventDefault();
-          video.currentTime = Math.min(video.duration, video.currentTime + 5);
-          emitSync('seek', video.currentTime);
+          seekBy(5);
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -239,6 +241,22 @@ const PlayerController = (() => {
       video.pause();
       emitSync('pause', video.currentTime);
     }
+  }
+
+  function seekBy(seconds) {
+    if (isYouTube && ytPlayer && ytReady) {
+      const duration = ytPlayer.getDuration();
+      const current = ytPlayer.getCurrentTime();
+      const maxTime = Number.isFinite(duration) && duration > 0 ? duration : current + seconds;
+      const target = Math.min(maxTime, Math.max(0, current + seconds));
+      ytPlayer.seekTo(target, true);
+      emitSync('seek', target);
+      return;
+    }
+
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : video.currentTime + seconds;
+    video.currentTime = Math.min(duration, Math.max(0, video.currentTime + seconds));
+    emitSync('seek', video.currentTime);
   }
 
   function toggleFullscreen() {

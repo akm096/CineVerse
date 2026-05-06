@@ -61,7 +61,9 @@
 
       <!-- Controls Bar -->
       <div class="controls-bar">
+        <button id="rewind5Btn" class="mobile-seek-btn" title="5 saniye geri" aria-label="5 saniye geri">-5</button>
         <button id="playPauseBtn" title="Oynat / Duraklat">▶️</button>
+        <button id="forward10Btn" class="mobile-seek-btn" title="10 saniye ileri" aria-label="10 saniye ileri">+10</button>
         <div class="progress-bar" id="progressBar">
           <div class="progress-bar-fill" id="progressFill"></div>
         </div>
@@ -104,8 +106,17 @@
         <div style="position:relative;">
           <div class="emoji-picker" id="emojiPicker"></div>
         </div>
+        <div class="reply-preview" id="replyPreview" style="display:none">
+          <div>
+            <div class="reply-preview-name" id="replyPreviewName"></div>
+            <div class="reply-preview-text" id="replyPreviewText"></div>
+          </div>
+          <button id="cancelReplyBtn" title="Yanıtı iptal et" aria-label="Yanıtı iptal et">×</button>
+        </div>
         <div class="chat-input-area">
           <button class="emoji-btn" id="emojiBtn" title="Emoji">😊</button>
+          <button class="chat-image-btn" id="chatImageBtn" title="Görsel gönder" aria-label="Görsel gönder">Resim</button>
+          <input type="file" id="chatImageInput" accept="image/*" style="display:none">
           <input type="text" id="chatInput" class="input-field" placeholder="Mesaj yaz..." maxlength="500">
           <button class="btn btn-primary btn-sm" id="sendChatBtn">Gönder</button>
         </div>

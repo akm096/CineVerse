@@ -221,9 +221,14 @@ const ICE_SERVERS = {
     });
 
     // Chat send
-    ChatModule.onSend((text) => {
-      ChatModule.displayMessage(username, text);
-      broadcast({ type: 'chat', name: username, text });
+    ChatModule.onSend((text, reply) => {
+      ChatModule.displayMessage(username, text, false, false, null, reply);
+      broadcast({ type: 'chat', name: username, text, reply });
+    });
+
+    ChatModule.onImageSend((image, reply) => {
+      ChatModule.displayMessage(username, '', false, false, image, reply);
+      broadcast({ type: 'chat-image', name: username, image, reply });
     });
   }
 
@@ -281,7 +286,14 @@ const ICE_SERVERS = {
 
     // Guest chat
     if (data.type === 'chat') {
-      ChatModule.displayMessage(data.name, data.text, false, true);
+      ChatModule.displayMessage(data.name, data.text, false, true, null, data.reply);
+      connections.forEach(c => {
+        if (c !== conn) c.send(data);
+      });
+    }
+
+    if (data.type === 'chat-image') {
+      ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply);
       connections.forEach(c => {
         if (c !== conn) c.send(data);
       });
@@ -327,10 +339,17 @@ const ICE_SERVERS = {
     });
 
     // Chat send
-    ChatModule.onSend((text) => {
-      ChatModule.displayMessage(username, text);
+    ChatModule.onSend((text, reply) => {
+      ChatModule.displayMessage(username, text, false, false, null, reply);
       if (connections[0] && connections[0].open) {
-        connections[0].send({ type: 'chat', name: username, text });
+        connections[0].send({ type: 'chat', name: username, text, reply });
+      }
+    });
+
+    ChatModule.onImageSend((image, reply) => {
+      ChatModule.displayMessage(username, '', false, false, image, reply);
+      if (connections[0] && connections[0].open) {
+        connections[0].send({ type: 'chat-image', name: username, image, reply });
       }
     });
   }
@@ -396,7 +415,10 @@ const ICE_SERVERS = {
         PlayerController.applySync(data.action, data.time);
       }
       if (data.type === 'chat') {
-        ChatModule.displayMessage(data.name, data.text, data.system, true);
+        ChatModule.displayMessage(data.name, data.text, data.system, true, null, data.reply);
+      }
+      if (data.type === 'chat-image') {
+        ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply);
       }
       if (data.type === 'video') {
         document.getElementById('videoUrlInput').value = data.url;
@@ -557,7 +579,7 @@ const ICE_SERVERS = {
   function loadSubtitleFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target.result;
+      const text = decodeSubtitleBuffer(e.target.result);
       const count = SubtitleEngine.load(text, file.name);
       document.getElementById('subtitleFileName').textContent = `✅ ${file.name} (${count} satır)`;
       showToast(`Altyazı yüklendi: ${count} satır 📝`);
@@ -569,7 +591,7 @@ const ICE_SERVERS = {
         broadcast({ type: 'subtitle-data', text, filename: file.name });
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }
 
   function loadSubtitleFromURL(url) {
@@ -577,9 +599,10 @@ const ICE_SERVERS = {
     fetch(url)
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
+        return r.arrayBuffer();
       })
-      .then(text => {
+      .then(buffer => {
+        const text = decodeSubtitleBuffer(buffer);
         const filename = url.split('/').pop().split('?')[0];
         const count = SubtitleEngine.load(text, filename);
         document.getElementById('subtitleFileName').textContent = `✅ ${filename} (${count} satır)`;
@@ -596,6 +619,34 @@ const ICE_SERVERS = {
         console.error('Subtitle URL error:', err);
         showToast('Altyazı yüklenemedi! ❌');
       });
+  }
+
+  function decodeSubtitleBuffer(buffer) {
+    const candidates = ['utf-8', 'windows-1254', 'iso-8859-9', 'windows-1252'];
+    let bestText = '';
+    let bestScore = Infinity;
+
+    candidates.forEach(encoding => {
+      try {
+        const text = new TextDecoder(encoding).decode(buffer).replace(/^\uFEFF/, '');
+        const score = getDecodeProblemScore(text);
+        if (score < bestScore) {
+          bestScore = score;
+          bestText = text;
+        }
+      } catch (err) {
+        // Some older browsers may not support every legacy label.
+      }
+    });
+
+    return bestText || new TextDecoder().decode(buffer).replace(/^\uFEFF/, '');
+  }
+
+  function getDecodeProblemScore(text) {
+    const replacementCount = (text.match(/\uFFFD/g) || []).length;
+    const mojibakeCount = (text.match(/(?:Ã.|Ä.|Å.|Â.|ğŸ)/g) || []).length;
+    const turkishCount = (text.match(/[çğıöşüÇĞİÖŞÜ]/g) || []).length;
+    return (replacementCount * 20) + (mojibakeCount * 3) - turkishCount;
   }
 
   // ===== Subtitle Settings =====
