@@ -47,11 +47,11 @@ jobs:
             npx cap add android
           fi
 
-      - name: Sync Capacitor
-        run: npx cap sync android
-
       - name: Make Gradle executable
         run: chmod +x android/gradlew
+
+      - name: Sync Capacitor
+        run: npx cap sync android
 
       - name: Build debug APK
         run: |
