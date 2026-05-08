@@ -41,12 +41,16 @@ const ICE_SERVERS = {
   let connections = [];  // host: array of DataConnection; guest: [hostConn]
   let users = [];        // {name, peerId}
   let syncHeartbeatTimer = null;
+  const APP_VERSION = '1.0.0';
 
   // Room settings (host-controlled)
   let roomSettings = {
     hostOnlyVideo: true,     // only host can change video URL
-    hostOnlyPlayback: false  // only host can play/pause/seek
+    hostOnlyPlayback: false, // only host can play/pause/seek
+    subtitleMode: 'personal' // personal: each user chooses; shared: host subtitles apply to all
   };
+  let localSubtitleMode = roomSettings.subtitleMode;
+  let userChangedSubtitleMode = false;
 
   // ===== Init =====
   document.addEventListener('DOMContentLoaded', () => {
@@ -56,6 +60,7 @@ const ICE_SERVERS = {
     initSubtitleUpload();
     initVideoSource();
     initRoomSettings();
+    initVersionLabel();
     PlayerController.init();
     ChatModule.init();
     showWelcomeModal();
@@ -107,11 +112,19 @@ const ICE_SERVERS = {
   }
 
   function applyRoomSettings(settings) {
-    roomSettings = settings;
+    roomSettings = { ...roomSettings, ...settings };
     const videoToggle = document.getElementById('hostOnlyVideo');
     const playbackToggle = document.getElementById('hostOnlyPlayback');
-    videoToggle.classList.toggle('active', settings.hostOnlyVideo);
-    playbackToggle.classList.toggle('active', settings.hostOnlyPlayback);
+    videoToggle.classList.toggle('active', roomSettings.hostOnlyVideo);
+    playbackToggle.classList.toggle('active', roomSettings.hostOnlyPlayback);
+    if (!userChangedSubtitleMode || isHost) {
+      setSubtitleMode(roomSettings.subtitleMode, { broadcastChange: false, persistChoice: false });
+    }
+  }
+
+  function initVersionLabel() {
+    const versionEl = document.getElementById('appVersion');
+    if (versionEl) versionEl.textContent = `v${APP_VERSION}`;
   }
 
   // ===== Welcome Modal =====
@@ -224,14 +237,26 @@ const ICE_SERVERS = {
     });
 
     // Chat send
-    ChatModule.onSend((text, reply) => {
-      ChatModule.displayMessage(username, text, false, false, null, reply, true);
-      broadcast({ type: 'chat', name: username, text, reply });
+    ChatModule.onSend((text, reply, messageId) => {
+      ChatModule.displayMessage(username, text, false, false, null, reply, true, messageId);
+      broadcast({ type: 'chat', name: username, text, reply, messageId });
     });
 
-    ChatModule.onImageSend((image, reply) => {
-      ChatModule.displayMessage(username, '', false, false, image, reply, true);
-      broadcast({ type: 'chat-image', name: username, image, reply });
+    ChatModule.onImageSend((image, reply, messageId) => {
+      ChatModule.displayMessage(username, '', false, false, image, reply, true, messageId);
+      broadcast({ type: 'chat-image', name: username, image, reply, messageId });
+    });
+
+    ChatModule.onTyping((isTyping) => {
+      broadcast({ type: 'typing', name: username, isTyping });
+    });
+
+    ChatModule.onReaction((messageId, emoji) => {
+      broadcast({ type: 'chat-reaction', messageId, emoji });
+    });
+
+    ChatModule.onEdit((messageId, text) => {
+      broadcast({ type: 'chat-edit', messageId, text });
     });
   }
 
@@ -251,7 +276,10 @@ const ICE_SERVERS = {
         currentTime: PlayerController.getCurrentTime(),
         paused: PlayerController.isPaused(),
         speed: PlayerController.getSpeed(),
-        settings: roomSettings
+        settings: roomSettings,
+        subtitleData: localSubtitleMode === 'shared' && lastSubtitleText
+          ? { text: lastSubtitleText, filename: lastSubtitleFilename }
+          : null
       });
       broadcast({ type: 'users', users });
       ChatModule.displayMessage('', `${data.name} odaya katıldı`, true);
@@ -289,14 +317,35 @@ const ICE_SERVERS = {
 
     // Guest chat
     if (data.type === 'chat') {
-      ChatModule.displayMessage(data.name, data.text, false, true, null, data.reply);
+      ChatModule.displayMessage(data.name, data.text, false, true, null, data.reply, false, data.messageId);
       connections.forEach(c => {
         if (c !== conn) c.send(data);
       });
     }
 
     if (data.type === 'chat-image') {
-      ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply);
+      ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply, false, data.messageId);
+      connections.forEach(c => {
+        if (c !== conn) c.send(data);
+      });
+    }
+
+    if (data.type === 'typing') {
+      ChatModule.setTyping(data.name, data.isTyping);
+      connections.forEach(c => {
+        if (c !== conn) c.send(data);
+      });
+    }
+
+    if (data.type === 'chat-reaction') {
+      ChatModule.applyReaction(data.messageId, data.emoji);
+      connections.forEach(c => {
+        if (c !== conn) c.send(data);
+      });
+    }
+
+    if (data.type === 'chat-edit') {
+      ChatModule.applyEdit(data.messageId, data.text);
       connections.forEach(c => {
         if (c !== conn) c.send(data);
       });
@@ -343,17 +392,35 @@ const ICE_SERVERS = {
     });
 
     // Chat send
-    ChatModule.onSend((text, reply) => {
-      ChatModule.displayMessage(username, text, false, false, null, reply, true);
+    ChatModule.onSend((text, reply, messageId) => {
+      ChatModule.displayMessage(username, text, false, false, null, reply, true, messageId);
       if (connections[0] && connections[0].open) {
-        connections[0].send({ type: 'chat', name: username, text, reply });
+        connections[0].send({ type: 'chat', name: username, text, reply, messageId });
       }
     });
 
-    ChatModule.onImageSend((image, reply) => {
-      ChatModule.displayMessage(username, '', false, false, image, reply, true);
+    ChatModule.onImageSend((image, reply, messageId) => {
+      ChatModule.displayMessage(username, '', false, false, image, reply, true, messageId);
       if (connections[0] && connections[0].open) {
-        connections[0].send({ type: 'chat-image', name: username, image, reply });
+        connections[0].send({ type: 'chat-image', name: username, image, reply, messageId });
+      }
+    });
+
+    ChatModule.onTyping((isTyping) => {
+      if (connections[0] && connections[0].open) {
+        connections[0].send({ type: 'typing', name: username, isTyping });
+      }
+    });
+
+    ChatModule.onReaction((messageId, emoji) => {
+      if (connections[0] && connections[0].open) {
+        connections[0].send({ type: 'chat-reaction', messageId, emoji });
+      }
+    });
+
+    ChatModule.onEdit((messageId, text) => {
+      if (connections[0] && connections[0].open) {
+        connections[0].send({ type: 'chat-edit', messageId, text });
       }
     });
   }
@@ -393,6 +460,9 @@ const ICE_SERVERS = {
         updateUserList();
         if (data.settings) applyRoomSettings(data.settings);
         if (data.speed) PlayerController.setSpeed(data.speed);
+        if (data.subtitleData && shouldApplySharedSubtitles()) {
+          applySharedSubtitle(data.subtitleData);
+        }
         if (data.videoUrl) {
           document.getElementById('videoUrlInput').value = data.videoUrl;
           PlayerController.loadSource(data.videoUrl);
@@ -422,10 +492,19 @@ const ICE_SERVERS = {
         PlayerController.smoothSyncTo(data.time, data.paused, data.speed, data.sentAt);
       }
       if (data.type === 'chat') {
-        ChatModule.displayMessage(data.name, data.text, data.system, true, null, data.reply);
+        ChatModule.displayMessage(data.name, data.text, data.system, true, null, data.reply, false, data.messageId);
       }
       if (data.type === 'chat-image') {
-        ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply);
+        ChatModule.displayMessage(data.name, '', false, true, data.image, data.reply, false, data.messageId);
+      }
+      if (data.type === 'typing') {
+        ChatModule.setTyping(data.name, data.isTyping);
+      }
+      if (data.type === 'chat-reaction') {
+        ChatModule.applyReaction(data.messageId, data.emoji);
+      }
+      if (data.type === 'chat-edit') {
+        ChatModule.applyEdit(data.messageId, data.text);
       }
       if (data.type === 'video') {
         document.getElementById('videoUrlInput').value = data.url;
@@ -435,12 +514,14 @@ const ICE_SERVERS = {
         applyRoomSettings(data.settings);
       }
       if (data.type === 'subtitle-data') {
+        if (!shouldApplySharedSubtitles()) return;
         // Host shared subtitles
         const count = SubtitleEngine.load(data.text, data.filename);
         document.getElementById('subtitleFileName').textContent = `✅ ${data.filename} (${count} satır) — Host tarafından`;
         showToast(`Host altyazı paylaştı: ${count} satır 📝`);
       }
       if (data.type === 'subtitle-clear') {
+        if (!shouldApplySharedSubtitles()) return;
         SubtitleEngine.clear();
         document.getElementById('subtitleText').textContent = '';
         document.getElementById('subtitleFileName').textContent = '';
@@ -600,8 +681,8 @@ const ICE_SERVERS = {
       lastSubtitleText = '';
       lastSubtitleFilename = '';
       showToast('Altyazı temizlendi');
-      // If host, broadcast clear to all
-      if (isHost) {
+      // If host is using shared mode, broadcast clear to all.
+      if (isHost && localSubtitleMode === 'shared') {
         broadcast({ type: 'subtitle-clear' });
       }
     });
@@ -615,10 +696,10 @@ const ICE_SERVERS = {
       document.getElementById('subtitleFileName').textContent = `✅ ${file.name} (${count} satır)`;
       showToast(`Altyazı yüklendi: ${count} satır 📝`);
 
-      // If host, share subtitle data to all guests
+      // If host is using shared mode, share subtitle data to all guests.
       lastSubtitleText = text;
       lastSubtitleFilename = file.name;
-      if (isHost) {
+      if (isHost && localSubtitleMode === 'shared') {
         broadcast({ type: 'subtitle-data', text, filename: file.name });
       }
     };
@@ -641,10 +722,10 @@ const ICE_SERVERS = {
         document.getElementById('subtitleFileName').textContent = `✅ ${filename} (${count} satır)`;
         showToast(`Altyazı yüklendi: ${count} satır 📝`);
 
-        // If host, share subtitle data
+        // If host is using shared mode, share subtitle data.
         lastSubtitleText = text;
         lastSubtitleFilename = filename;
-        if (isHost) {
+        if (isHost && localSubtitleMode === 'shared') {
           broadcast({ type: 'subtitle-data', text, filename });
         }
       })
@@ -724,10 +805,56 @@ const ICE_SERVERS = {
     return (replacementCount * 20) + (mojibakeCount * 3) - turkishCount;
   }
 
+  function setSubtitleMode(mode, options = {}) {
+    const nextMode = mode === 'shared' ? 'shared' : 'personal';
+    localSubtitleMode = nextMode;
+
+    const subtitleSyncMode = document.getElementById('subtitleSyncMode');
+    if (subtitleSyncMode) subtitleSyncMode.value = nextMode;
+
+    if (options.persistChoice) {
+      localStorage.setItem('cv-subtitle-mode', nextMode);
+    }
+
+    if (isHost) {
+      roomSettings.subtitleMode = nextMode;
+      if (options.broadcastChange) {
+        broadcast({ type: 'settings', settings: roomSettings });
+        if (nextMode === 'shared' && lastSubtitleText) {
+          broadcast({ type: 'subtitle-data', text: lastSubtitleText, filename: lastSubtitleFilename });
+        }
+      }
+    }
+  }
+
+  function shouldApplySharedSubtitles() {
+    return localSubtitleMode === 'shared';
+  }
+
+  function applySharedSubtitle(data) {
+    const count = SubtitleEngine.load(data.text, data.filename);
+    document.getElementById('subtitleFileName').textContent = `OK ${data.filename} (${count} satir) - Host`;
+    showToast(`Host altyazi paylasti: ${count} satir`);
+  }
+
   // ===== Subtitle Settings =====
   function initSubtitleSettings() {
     const subtitleText = document.getElementById('subtitleText');
     const subtitleOverlay = document.getElementById('subtitleOverlay');
+    const subtitleSyncMode = document.getElementById('subtitleSyncMode');
+    const savedSubtitleMode = localStorage.getItem('cv-subtitle-mode') || roomSettings.subtitleMode;
+    userChangedSubtitleMode = Boolean(localStorage.getItem('cv-subtitle-mode'));
+
+    setSubtitleMode(savedSubtitleMode, { broadcastChange: false, persistChoice: false });
+    if (subtitleSyncMode) {
+      subtitleSyncMode.addEventListener('change', (e) => {
+        userChangedSubtitleMode = true;
+        setSubtitleMode(e.target.value, { broadcastChange: isHost, persistChoice: true });
+        showToast(e.target.value === 'shared'
+          ? 'Altyazi modu: host ile ortak'
+          : 'Altyazi modu: kisiye ozel');
+      });
+    }
 
     document.getElementById('subFontSize').addEventListener('input', (e) => {
       subtitleText.style.fontSize = e.target.value + 'px';

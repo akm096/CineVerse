@@ -14,11 +14,16 @@ const ChatModule = (() => {
 
   let sendCallback = null;
   let imageSendCallback = null;
+  let typingCallback = null;
+  let reactionCallback = null;
+  let editCallback = null;
   let notifSoundEnabled = true;
   let audioCtx = null;
   let selectedReply = null;
   let lastMessageGroup = null;
   let messageSeq = 0;
+  let typingTimer = null;
+  const typingUsers = new Map();
 
   function init() {
     const chatInput = document.getElementById('chatInput');
@@ -62,6 +67,7 @@ const ChatModule = (() => {
         sendMessage();
       }
     });
+    chatInput.addEventListener('input', notifyTyping);
 
     imageBtn.addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
@@ -79,6 +85,23 @@ const ChatModule = (() => {
 
     cancelReplyBtn.addEventListener('click', clearReply);
     chatMessages.addEventListener('click', (e) => {
+      const reactionBtn = e.target.closest('.chat-reaction-btn');
+      if (reactionBtn) {
+        const item = reactionBtn.closest('.chat-message-item');
+        if (!item) return;
+        applyReaction(item.dataset.messageId, reactionBtn.dataset.emoji);
+        if (reactionCallback) reactionCallback(item.dataset.messageId, reactionBtn.dataset.emoji);
+        return;
+      }
+
+      const editBtn = e.target.closest('.chat-edit-action');
+      if (editBtn) {
+        const item = editBtn.closest('.chat-message-item');
+        if (!item) return;
+        startEdit(item);
+        return;
+      }
+
       const replyBtn = e.target.closest('.chat-reply-action');
       if (!replyBtn) return;
       const item = replyBtn.closest('.chat-message-item');
@@ -105,9 +128,10 @@ const ChatModule = (() => {
     const text = chatInput.value.trim();
     if (!text) return;
     chatInput.value = '';
+    sendTypingState(false);
     const reply = selectedReply;
     clearReply();
-    if (sendCallback) sendCallback(text, reply);
+    if (sendCallback) sendCallback(text, reply, createMessageId());
   }
 
   function sendImage(file) {
@@ -128,7 +152,7 @@ const ChatModule = (() => {
         }
         const reply = selectedReply;
         clearReply();
-        if (imageSendCallback) imageSendCallback(image, reply);
+        if (imageSendCallback) imageSendCallback(image, reply, createMessageId());
       })
       .catch(() => showToast('Görsel hazırlanamadı'));
   }
@@ -218,7 +242,7 @@ const ChatModule = (() => {
    * Display a chat message
    * @param {boolean} playSound - whether to play notification sound (for incoming messages)
    */
-  function displayMessage(name, text, isSystem = false, playSound = false, image = null, reply = null, isOwn = false) {
+  function displayMessage(name, text, isSystem = false, playSound = false, image = null, reply = null, isOwn = false, messageId = null) {
     const container = document.getElementById('chatMessages');
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -230,7 +254,7 @@ const ChatModule = (() => {
       div.innerHTML = `<span class="chat-msg-text">${escapeHTML(text)}</span>`;
       container.appendChild(div);
     } else {
-      const message = createMessageItem(name, text, image, reply, timeStr);
+      const message = createMessageItem(name, text, image, reply, timeStr, isOwn, messageId);
       if (lastMessageGroup && lastMessageGroup.dataset.name === name && lastMessageGroup.dataset.own === String(isOwn)) {
         lastMessageGroup.querySelector('.chat-msg-body').appendChild(message);
       } else {
@@ -258,25 +282,128 @@ const ChatModule = (() => {
     if (playSound) playNotifSound();
   }
 
-  function createMessageItem(name, text, image, reply, timeStr) {
+  function createMessageItem(name, text, image, reply, timeStr, isOwn, messageId) {
     const item = document.createElement('div');
-    const id = `msg-${Date.now()}-${++messageSeq}`;
+    const id = messageId || createMessageId();
     const preview = image ? 'Görsel' : text;
 
     item.className = 'chat-message-item';
     item.id = id;
+    item.dataset.messageId = id;
     item.dataset.name = name;
     item.dataset.preview = preview.slice(0, 180);
     item.dataset.type = image ? 'image' : 'text';
     item.innerHTML = `
       ${renderReplyQuote(reply)}
       ${image ? renderImage(image) : `<div class="chat-msg-text">${escapeHTML(text)}</div>`}
+      <div class="chat-reactions" data-reactions></div>
       <div class="chat-msg-meta">
         <span class="chat-msg-time">${timeStr}</span>
+        ${isOwn && !image ? '<button class="chat-edit-action" type="button">Düzenle</button>' : ''}
         <button class="chat-reply-action" type="button">Yanıtla</button>
+      </div>
+      <div class="chat-reaction-picker">
+        <button class="chat-reaction-btn" type="button" data-emoji="❤️">❤️</button>
+        <button class="chat-reaction-btn" type="button" data-emoji="👍">👍</button>
+        <button class="chat-reaction-btn" type="button" data-emoji="😂">😂</button>
       </div>
     `;
     return item;
+  }
+
+  function createMessageId() {
+    return `msg-${Date.now()}-${++messageSeq}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  function notifyTyping() {
+    sendTypingState(true);
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => sendTypingState(false), 1200);
+  }
+
+  function sendTypingState(isTyping) {
+    if (typingCallback) typingCallback(isTyping);
+  }
+
+  function setTyping(name, isTyping) {
+    if (!name) return;
+    if (isTyping) {
+      typingUsers.set(name, Date.now());
+      setTimeout(() => {
+        const lastSeen = typingUsers.get(name);
+        if (lastSeen && Date.now() - lastSeen >= 1800) {
+          typingUsers.delete(name);
+          renderTyping();
+        }
+      }, 1900);
+    } else {
+      typingUsers.delete(name);
+    }
+    renderTyping();
+  }
+
+  function renderTyping() {
+    const indicator = document.getElementById('typingIndicator');
+    if (!indicator) return;
+    const names = Array.from(typingUsers.keys());
+    indicator.textContent = names.length ? `${names.join(', ')} yaziyor...` : '';
+    indicator.classList.toggle('show', names.length > 0);
+  }
+
+  function applyReaction(messageId, emoji) {
+    const item = findMessage(messageId);
+    if (!item || !emoji) return;
+    const reactions = item.querySelector('[data-reactions]');
+    if (!reactions) return;
+    const safeEmoji = String(emoji);
+    let pill = Array.from(reactions.querySelectorAll('.chat-reaction-pill')).find(el => el.dataset.emoji === safeEmoji);
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'chat-reaction-pill';
+      pill.dataset.emoji = safeEmoji;
+      pill.dataset.count = '0';
+      reactions.appendChild(pill);
+    }
+    const count = Number(pill.dataset.count || 0) + 1;
+    pill.dataset.count = String(count);
+    pill.textContent = `${safeEmoji} ${count}`;
+  }
+
+  function startEdit(item) {
+    if (item.dataset.type !== 'text') return;
+    const textEl = item.querySelector('.chat-msg-text');
+    if (!textEl) return;
+    const nextText = window.prompt('Mesaji duzenle', textEl.textContent);
+    if (nextText === null) return;
+    const trimmed = nextText.trim();
+    if (!trimmed) return;
+    applyEdit(item.dataset.messageId, trimmed);
+    if (editCallback) editCallback(item.dataset.messageId, trimmed);
+  }
+
+  function applyEdit(messageId, text) {
+    const item = findMessage(messageId);
+    if (!item || item.dataset.type !== 'text') return;
+    const textEl = item.querySelector('.chat-msg-text');
+    if (!textEl) return;
+    textEl.textContent = text;
+    item.dataset.preview = text.slice(0, 180);
+    let edited = item.querySelector('.chat-edited-label');
+    if (!edited) {
+      edited = document.createElement('span');
+      edited.className = 'chat-edited-label';
+      edited.textContent = 'duzenlendi';
+      item.querySelector('.chat-msg-meta')?.appendChild(edited);
+    }
+  }
+
+  function findMessage(messageId) {
+    return document.querySelector(`.chat-message-item[data-message-id="${cssEscape(messageId)}"]`);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && CSS.escape) return CSS.escape(value);
+    return String(value).replace(/"/g, '\\"');
   }
 
   function renderReplyQuote(reply) {
@@ -341,6 +468,9 @@ const ChatModule = (() => {
 
   function onSend(cb) { sendCallback = cb; }
   function onImageSend(cb) { imageSendCallback = cb; }
+  function onTyping(cb) { typingCallback = cb; }
+  function onReaction(cb) { reactionCallback = cb; }
+  function onEdit(cb) { editCallback = cb; }
 
-  return { init, displayMessage, onSend, onImageSend };
+  return { init, displayMessage, onSend, onImageSend, onTyping, onReaction, onEdit, setTyping, applyReaction, applyEdit };
 })();
