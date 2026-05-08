@@ -4,15 +4,16 @@
   "description": "CineVerse — Birlikte video izleme uygulaması",
   "main": "index.html",
   "scripts": {
+    "prepare:web": "node scripts/prepare-web.mjs",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
-    "build:android": "npx cap sync android"
+    "build:android": "npm run prepare:web && npx cap sync android"
   },
   "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/core": "^6.0.0"
+    "@capacitor/android": "^8.3.3",
+    "@capacitor/core": "^8.3.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.0.0"
+    "@capacitor/cli": "^8.3.3"
   }
 }

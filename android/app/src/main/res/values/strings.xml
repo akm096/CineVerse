@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CineVerse</string>
+    <string name="title_activity_main">CineVerse</string>
+    <string name="package_name">com.cineverse.app</string>
+    <string name="custom_url_scheme">com.cineverse.app</string>
+</resources>

@@ -56,6 +56,29 @@ Then open:
 http://localhost:8080/player.html
 ```
 
+## Android APK
+
+This repository is ready to build an Android APK with GitHub Actions.
+
+1. Push the project to the `main` or `master` branch on GitHub.
+2. Open the repository on GitHub.
+3. Go to **Actions**.
+4. Open **Build Android APK**.
+5. Run the workflow manually, or wait for it to run after a push.
+6. Download `CineVerse-debug-apk` from the workflow artifacts.
+
+On normal pushes, the workflow also creates a GitHub Release with the debug APK attached.
+
+Local Android preparation:
+
+```bash
+npm install
+npm run prepare:web
+npx cap sync android
+```
+
+To build locally, Java 17 or newer and the Android SDK are required.
+
 ## Project Structure
 
 ```text

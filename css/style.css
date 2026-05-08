@@ -44,6 +44,7 @@
 html {
   scroll-behavior: smooth;
   font-size: 16px;
+  min-height: 100%;
 }
 
 body {
@@ -54,6 +55,7 @@ body {
   transition: background .4s, color .4s;
   overflow-x: hidden;
   line-height: 1.6;
+  touch-action: manipulation;
 }
 
 a { color: var(--accent-light); text-decoration: none; transition: color .2s; }
@@ -272,6 +274,7 @@ button, input, select, textarea {
   display: grid;
   grid-template-columns: 1fr 360px;
   height: 100vh;
+  height: 100dvh;
   padding-top: 60px;
 }
 
@@ -397,6 +400,7 @@ button, input, select, textarea {
   background: var(--bg-card-solid);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .controls-bar button {
@@ -463,6 +467,7 @@ button, input, select, textarea {
   background: var(--bg-card-solid);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+  min-width: 0;
 }
 .source-bar .input-field { flex: 1; padding: 10px 14px; font-size: .9rem; }
 
@@ -799,6 +804,7 @@ button, input, select, textarea {
   gap: 6px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
+  min-width: 0;
 }
 .chat-input-area .input-field { flex: 1; padding: 10px 14px; font-size: .88rem; }
 .emoji-btn {
@@ -1003,14 +1009,31 @@ button, input, select, textarea {
 @media (max-width: 900px) {
   .app-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 55vh 1fr;
+    grid-template-rows: minmax(260px, 50dvh) minmax(0, 1fr);
   }
   .sidebar { border-left: none; border-top: 1px solid var(--border); }
 }
 
 @media (max-width: 600px) {
+  .container { padding: 0 16px; }
+  .navbar { padding: 8px 0; }
+  .navbar-brand { font-size: 1.05rem; }
+  .navbar-brand svg { width: 28px; height: 28px; }
+  .navbar-actions { gap: 6px; }
+  .navbar-actions .btn-sm {
+    padding: 7px 10px;
+    max-width: 150px;
+    white-space: normal;
+    line-height: 1.15;
+  }
+  .hero { min-height: 92dvh; padding: 92px 18px 56px; }
   .hero h1 { font-size: 2rem; }
   .hero p { font-size: 1rem; }
+  .hero-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .features { padding: 48px 0; }
   .features { grid-template-columns: 1fr; }
   .controls-bar { gap: 6px; padding: 8px 10px; }
   .volume-slider { width: 50px; }
@@ -1071,16 +1094,72 @@ body {
 @media (max-width: 600px) {
   .chat-messages::-webkit-scrollbar { display: none; }
   .chat-messages { -ms-overflow-style: none; scrollbar-width: none; }
-  
+
   /* Larger controls on mobile */
-  .controls-bar { gap: 4px; padding: 8px 8px; }
+  .app-layout { padding-top: 50px; }
+  .controls-bar {
+    display: grid;
+    grid-template-columns: 44px 44px 44px minmax(90px, 1fr) auto 44px 44px;
+    gap: 4px;
+    padding: 8px;
+  }
   .controls-bar button { font-size: 1.1rem; }
   .controls-bar .mobile-seek-btn { display: flex !important; }
+  .volume-slider { display: none; }
   .chat-reply-action { opacity: 1; }
   .time-display { font-size: .7rem; min-width: 70px; }
-  .speed-select { font-size: .75rem; padding: 2px 4px; }
-  
+  .speed-select {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 38px;
+    font-size: .85rem;
+    padding: 6px 8px;
+  }
+
   /* Stack source bar input */
-  .source-bar { padding: 8px 10px; }
+  .source-bar {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+  }
   .source-bar .input-field { font-size: .82rem; padding: 8px 10px; }
+  .source-bar .btn { width: 100%; justify-content: center; }
+  .sidebar-tab { font-size: .78rem; padding: 11px 4px; }
+  .chat-input-area {
+    padding: 8px;
+    gap: 5px;
+  }
+  .chat-input-area .input-field {
+    min-width: 0;
+    padding: 9px 10px;
+  }
+  .emoji-btn,
+  .chat-image-btn,
+  .chat-input-area .btn {
+    min-width: 42px;
+    min-height: 42px;
+    padding: 7px 9px;
+  }
+  .chat-image-btn { font-size: 0; }
+  .chat-image-btn::before {
+    content: '+';
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .modal {
+    width: calc(100% - 28px);
+    padding: 24px 18px;
+  }
+  .modal-actions { flex-direction: column; }
+}
+
+@media (max-width: 380px) {
+  .controls-bar {
+    grid-template-columns: 40px 40px 40px minmax(72px, 1fr) auto 40px;
+  }
+  .controls-bar button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .time-display { min-width: 0; }
+  #muteBtn { display: none; }
 }

@@ -2,13 +2,16 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: ['**']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,35 +24,36 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Prepare web assets
-        run: |
-          mkdir -p www/css www/js www/functions
-          cp index.html www/
-          cp player.html www/
-          cp -r css/* www/css/
-          cp -r js/* www/js/
-          cp -r functions/* www/functions/
-          cp gdrive-worker.js www/ 2>/dev/null || true
+        run: npm run prepare:web
 
       - name: Add Android platform
-        run: npx cap add android
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Make gradlew executable
+      - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build debug APK
         run: |
           cd android
           ./gradlew assembleDebug
@@ -59,20 +63,21 @@ jobs:
         with:
           name: CineVerse-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
-      - name: Create Release
+      - name: Create GitHub release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: CineVerse v1.0.${{ github.run_number }}
+          tag_name: android-v${{ github.run_number }}
+          name: CineVerse Android build ${{ github.run_number }}
           body: |
-            🎬 CineVerse Android APK
-            
-            Otomatik build - commit: ${{ github.sha }}
-            
-            **Kurulum:** APK dosyasını indirip Android telefonunuza yükleyin.
-            Bilinmeyen kaynaklardan yüklemeye izin vermeniz gerekebilir.
+            CineVerse Android APK
+
+            Otomatik build commit: ${{ github.sha }}
+
+            Kurulum: APK dosyasini indirip Android telefonunuza yukleyin.
+            Bilinmeyen kaynaklardan yuklemeye izin vermeniz gerekebilir.
           files: android/app/build/outputs/apk/debug/app-debug.apk
           draft: false
           prerelease: false

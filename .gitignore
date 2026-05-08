@@ -1,11 +1,13 @@
 # Dependencies
 node_modules/
+www/
 
 # Capacitor Android build outputs
 android/app/build/
 android/.gradle/
 android/build/
 android/local.properties
+.gradle/
 
 # IDE
 .idea/
