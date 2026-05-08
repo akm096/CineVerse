@@ -1,132 +1,125 @@
-<div align="center">
+# CineVerse
 
-<img src="https://img.shields.io/badge/CineVerse-v1.0-7c3aed?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMzIgMzIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPjxwb2x5Z29uIHBvaW50cz0iMTMsMTAgMjMsMTYgMTMsMjIiIGZpbGw9IndoaXRlIi8+PC9zdmc+" alt="CineVerse">
+CineVerse is a lightweight watch-party app for watching videos with friends in synced rooms. It supports direct video links, subtitles, real-time chat, message reactions, editable messages, and host-controlled room permissions.
 
-# 🎬 CineVerse
+Live app: https://newcineverse.sensei.web.tr
 
-**Arkadaşlarınla senkron video izle — altyazı, sohbet ve oda desteğiyle.**
+Cloudflare Pages preview: https://cineverse-9rp.pages.dev
 
-[![HTML](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
-[![CSS](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/CSS)
-[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![HLS.js](https://img.shields.io/badge/HLS.js-ff6b6b?style=flat-square)](https://github.com/video-dev/hls.js)
-[![PeerJS](https://img.shields.io/badge/PeerJS-7c3aed?style=flat-square)](https://peerjs.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+Repository: https://github.com/akm096/CineVerse
 
-[🚀 Canlıya Git](https://cineverse.indevs.in/) · [🐛 Hata Bildir](https://github.com/akm096/CineVerse/issues) · [💡 Öneri Sun](https://github.com/akm096/CineVerse/issues)
+## Features
 
-</div>
-
----
-
-## ✨ Özellikler
-
-| Özellik | Detay |
+| Feature | Details |
 |---|---|
-| 🎬 **MP4 + M3U8/HLS** | Doğrudan URL yapıştırarak her iki formatı oynat |
-| ⚡ **Oynatma Hızı** | 0.25x'ten 3x'e kadar 10 farklı hız seçeneği |
-| 📝 **Altyazı** | SRT, VTT, JSON — URL veya dosya yükle, sürükle-bırak desteği |
-| 🎨 **Altyazı Özelleştirme** | Boyut, renk, arka plan, opaklık, konum ayarları |
-| 👥 **Oda Sistemi** | P2P bağlantı ile senkron izleme, paylaşılabilir oda linki |
-| 💬 **Canlı Sohbet** | Emoji destekli gerçek zamanlı sohbet |
-| 🔔 **Bildirim Sesi** | Mesaj gelince ayarlanabilir bildirim sesi |
-| 🌗 **Koyu/Açık Tema** | Tek tıkla tema değiştirme, tercih kaydedilir |
-| ⚙️ **Oda Ayarları** | "Sadece host video değiştirebilir" ve "Sadece host oynatmayı kontrol edebilir" izinleri |
-| 🖥️ **Tam Ekran + Sohbet** | Tam ekranda sohbet paneli görünür kalmaya devam eder |
-| 🇹🇷 **Türkçe Arayüz** | Tamamen Türkçe |
+| Synced rooms | Create a room, share the room link, and watch together over PeerJS/WebRTC. |
+| Host controls | Host can decide whether guests may change video or playback state. |
+| Video sources | Supports MP4, M3U8/HLS, YouTube, Google Drive proxy links, and iframe-based embeds. |
+| Playback tools | Play/pause, seek, volume, mute, speed from 0.25x to 3x, fullscreen. |
+| Subtitles | Load SRT, VTT, JSON, or ASS subtitles from file drag-drop or URL. |
+| Personal subtitles | Each user can keep their own subtitle selection without forcing it on others. |
+| Shared subtitles | Optional host-shared subtitle mode for rooms that want one common subtitle. |
+| Subtitle styling | Font size, color, background, opacity, and top/bottom position controls. |
+| Chat | Real-time chat with emoji picker, replies, image upload/paste, and notification sound. |
+| Message reactions | React to messages with heart, like, and laugh reactions. |
+| Typing indicator | Shows when another room member is writing. |
+| Edit own messages | Text messages you sent can be edited after sending. |
+| Room version label | The room panel shows the current app version. |
+| Theme | Dark/light theme toggle with saved preference. |
 
----
+## Current Version
 
-## 📸 Ekran Görüntüleri
+`v1.1.0`
 
-| Ana Sayfa (Koyu) | Video Oynatıcı | Tam Ekran + Sohbet |
-|:---:|:---:|:---:|
+## Quick Start
 
----
+1. Open the live app.
+2. Enter a username.
+3. Create a room or join with a room link.
+4. Paste a video URL and load it.
+5. Share the room link with friends.
+6. Optional: open the Subtitle tab and choose either personal subtitles or host-shared subtitles.
 
-## 🚀 Nasıl Kullanılır
+## Local Run
 
-### Hızlı Başlangıç
-
-1. Siteye git: **[cineverse.indevs.in](https://cineverse.indevs.in)**
-2. Kullanıcı adını yaz ve **"Oda Oluştur"** düğmesine tıkla
-3. Video URL'yi yapıştır (MP4 veya M3U8 linki)
-4. Oda bağlantısını kopyalayıp arkadaşlarına gönder
-5. Birlikte senkron izlemeye başlayın! 🎉
-
-### Yerel Çalıştırma
+Use an HTTP server. The room system will not work correctly from `file://`.
 
 ```bash
-# Repo'yu klonla
 git clone https://github.com/akm096/CineVerse.git
 cd CineVerse
-
-# Herhangi bir HTTP server ile aç (örnek: Python)
 python -m http.server 8080
-
-# Tarayıcıda aç
-# http://localhost:8080
 ```
 
-> ⚠️ **Not:** Oda sistemi (PeerJS) `file://` protokolunda çalışmaz. Yerel test için bir HTTP server kullan veya canlı siteyi kullan.
+Then open:
 
----
-
-## 📂 Proje Yapısı
-
+```text
+http://localhost:8080/player.html
 ```
+
+## Project Structure
+
+```text
 CineVerse/
-├── index.html          # Ana sayfa (özellikler, hero)
-├── player.html         # Video oynatıcı sayfası
+├── index.html
+├── player.html
+├── gdrive-worker.js
+├── functions/
+│   └── proxy.js
 ├── css/
-│   └── style.css       # Tüm stiller — dark/light tema, glassmorphism
+│   └── style.css
 └── js/
-    ├── app.js          # Ana uygulama — oda yönetimi, ayarlar, kablolama
-    ├── player.js       # Video kontrolcüsü — MP4 + HLS/M3U8
-    ├── subtitles.js    # Altyazı parser — SRT, VTT, JSON
-    └── chat.js         # Sohbet + emoji seçici + bildirim sesi
+    ├── app.js
+    ├── chat.js
+    ├── player.js
+    └── subtitles.js
 ```
 
----
+## Main Files
 
-## 🔧 Teknik Detaylar
+| File | Purpose |
+|---|---|
+| `index.html` | Landing/home page. |
+| `player.html` | Main room, video, chat, subtitle, and settings UI. |
+| `css/style.css` | App layout, themes, chat UI, subtitle UI, responsive behavior. |
+| `js/app.js` | Room creation/joining, PeerJS sync, room settings, subtitle sharing mode. |
+| `js/player.js` | Video loading and playback controls. |
+| `js/chat.js` | Chat messages, replies, images, reactions, typing indicator, editing. |
+| `js/subtitles.js` | Subtitle parser and text lookup engine. |
+| `gdrive-worker.js` | Cloudflare Worker helper for Google Drive media proxying. |
 
-- **Saf statik site** — Hiçbir backend, build adımı veya Node.js gerektirmez
-- **PeerJS** — P2P WebRTC tabanlı oda senkronizasyonu (ücretli cloud relay için kendi PeerServer'ını kurabilirsin)
-- **HLS.js** — CDN üzerinden yüklenir, M3U8 stream desteği sağlar
-- **Web Audio API** — Harici ses dosyası olmadan bildirim sesi üretir
+## Deployment
 
----
+### Cloudflare Pages
 
-## ☁️ Hosting
+This app is static and can be deployed directly from the project root.
 
-Proje tamamen statik olduğu için pek çok ücretsiz platformda çalışır:
+```bash
+npx wrangler pages deploy . --project-name cineverse --commit-dirty=true
+```
 
-### Cloudflare Pages (Önerilen) ⭐
-1. Bu repo'yu fork'la
-2. [pages.cloudflare.com](https://pages.cloudflare.com) → GitHub bağla → Build çıkışı: `/` (build yok)
-3. Deploy → `*.pages.dev` domain ve sınırsız bant genişliği!
+There is no build command and no output directory. Use `/` as the project root.
 
-### GitHub Pages
-1. Repo → **Settings** → **Pages** → Branch: `main` → `/` (root)
-2. `https://akm096.github.io/CineVerse` adresinde yayına girer
+### GitHub
 
----
+The active repository is:
 
-## 🤝 Katkıda Bulunma
+```text
+https://github.com/akm096/CineVerse
+```
 
-Pull request'ler memnuniyetle kabul edilir! Büyük değişiklikler için önce bir issue açmanı öneririm.
+Recent work has been pushed to:
 
----
+```text
+codex/chat-images-replies
+```
 
-## 📄 Lisans
+## Notes
 
-[MIT](LICENSE) © 2026 CineVerse
+- PeerJS needs an HTTP/HTTPS context.
+- Subtitle mode defaults to personal, so new users can choose their own subtitles independently.
+- If the host switches subtitle mode to shared, host-loaded subtitles are sent to the room.
+- Chat reactions and edits are synced by message id inside the active room session.
 
----
+## License
 
-<div align="center">
-
-❤️ ile yapıldı — Kişisel kullanım için ücretsiz
-
-</div>
+MIT

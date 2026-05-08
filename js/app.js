@@ -41,7 +41,7 @@ const ICE_SERVERS = {
   let connections = [];  // host: array of DataConnection; guest: [hostConn]
   let users = [];        // {name, peerId}
   let syncHeartbeatTimer = null;
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.1.0';
 
   // Room settings (host-controlled)
   let roomSettings = {
