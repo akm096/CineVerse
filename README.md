@@ -77,7 +77,7 @@ npm run prepare:web
 npx cap sync android
 ```
 
-To build locally, Java 17 or newer and the Android SDK are required.
+To build locally, Java 21 or newer and the Android SDK are required.
 
 ## Project Structure
 
