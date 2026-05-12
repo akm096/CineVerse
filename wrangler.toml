@@ -1,0 +1,8 @@
+name = "cineverse"
+compatibility_date = "2026-05-11"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cineverse-db"
+database_id = "7da768f3-5331-46c0-8bbb-877255db4b83"

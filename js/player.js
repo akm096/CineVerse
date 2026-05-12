@@ -476,6 +476,7 @@ const PlayerController = (() => {
    * Load a video URL (auto-detects MP4, M3U8, Google Drive, YouTube)
    */
   function loadSource(url) {
+    url = normalizeMediaUrl(url);
     // Destroy old HLS
     if (hlsInstance) {
       hlsInstance.destroy();
@@ -513,7 +514,8 @@ const PlayerController = (() => {
       return;
     }
 
-    const isM3U8 = url.includes('.m3u8') || url.includes('m3u8');
+    const mediaUrl = getMediaUrlInfo(url);
+    const isM3U8 = mediaUrl.pathname.includes('.m3u8') || mediaUrl.full.includes('m3u8');
 
     if (isM3U8 && Hls.isSupported()) {
       isHLS = true;
@@ -538,6 +540,25 @@ const PlayerController = (() => {
     } else {
       video.src = url;
       video.play().catch(() => {});
+    }
+  }
+
+  function normalizeMediaUrl(url) {
+    return String(url || '').trim().replace(/&amp;/gi, '&').replace(/&#38;/g, '&');
+  }
+
+  function getMediaUrlInfo(url) {
+    try {
+      const parsed = new URL(url);
+      return {
+        full: url.toLowerCase(),
+        pathname: parsed.pathname.toLowerCase()
+      };
+    } catch {
+      return {
+        full: String(url || '').toLowerCase(),
+        pathname: String(url || '').split('?')[0].toLowerCase()
+      };
     }
   }
 
@@ -788,6 +809,13 @@ const PlayerController = (() => {
     return video ? video.currentTime : 0;
   }
 
+  function getDuration() {
+    if (isYouTube && ytPlayer && ytReady) {
+      return ytPlayer.getDuration();
+    }
+    return video ? video.duration : 0;
+  }
+
   function isPaused() {
     if (isYouTube && ytPlayer && ytReady) {
       return ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING;
@@ -804,5 +832,5 @@ const PlayerController = (() => {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
 
-  return { init, loadSource, applySync, onSync, getCurrentTime, isPaused, setSpeed, getSpeed, smoothSyncTo };
+  return { init, loadSource, applySync, onSync, getCurrentTime, getDuration, isPaused, setSpeed, getSpeed, smoothSyncTo };
 })();

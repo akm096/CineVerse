@@ -8,6 +8,7 @@ const outDir = path.join(root, 'www');
 const copyItems = [
   ['index.html', 'index.html'],
   ['player.html', 'player.html'],
+  ['library-admin.html', 'library-admin.html'],
   ['css', 'css'],
   ['js', 'js'],
   ['functions', 'functions'],

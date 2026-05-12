@@ -41,13 +41,18 @@ const ICE_SERVERS = {
   let connections = [];  // host: array of DataConnection; guest: [hostConn]
   let users = [];        // {name, peerId}
   let syncHeartbeatTimer = null;
-  const APP_VERSION = '1.1.0';
+  let roomRegistryTimer = null;
+  let activeRoomsTimer = null;
+  let roomHostToken = '';
+  let currentRoomContent = null; // Persistent library content loaded in this room, if any.
+  const APP_VERSION = '1.2.6';
 
   // Room settings (host-controlled)
   let roomSettings = {
     hostOnlyVideo: true,     // only host can change video URL
     hostOnlyPlayback: false, // only host can play/pause/seek
-    subtitleMode: 'personal' // personal: each user chooses; shared: host subtitles apply to all
+    subtitleMode: 'personal', // personal: each user chooses; shared: host subtitles apply to all
+    visibility: 'private'
   };
   let localSubtitleMode = roomSettings.subtitleMode;
   let userChangedSubtitleMode = false;
@@ -63,7 +68,8 @@ const ICE_SERVERS = {
     initVersionLabel();
     PlayerController.init();
     ChatModule.init();
-    showWelcomeModal();
+    initRoomEntry();
+    initActiveRooms();
   });
 
   // ===== Theme =====
@@ -95,6 +101,7 @@ const ICE_SERVERS = {
   function initRoomSettings() {
     const videoToggle = document.getElementById('hostOnlyVideo');
     const playbackToggle = document.getElementById('hostOnlyPlayback');
+    const visibilityToggle = document.getElementById('roomVisibilityToggle');
 
     videoToggle.addEventListener('click', () => {
       if (!isHost) { showToast('Sadece host ayarları değiştirebilir'); return; }
@@ -109,14 +116,27 @@ const ICE_SERVERS = {
       roomSettings.hostOnlyPlayback = playbackToggle.classList.contains('active');
       broadcast({ type: 'settings', settings: roomSettings });
     });
+
+    visibilityToggle?.addEventListener('click', () => {
+      if (!isHost) { showToast('Sadece host ayarları değiştirebilir'); return; }
+      visibilityToggle.classList.toggle('active');
+      roomSettings.visibility = visibilityToggle.classList.contains('active') ? 'public' : 'private';
+      broadcast({ type: 'settings', settings: roomSettings });
+      syncRoomRegistry({ immediate: true });
+      showToast(roomSettings.visibility === 'public'
+        ? 'Oda aktiv odalarda gorunur'
+        : 'Oda private edildi');
+    });
   }
 
   function applyRoomSettings(settings) {
     roomSettings = { ...roomSettings, ...settings };
     const videoToggle = document.getElementById('hostOnlyVideo');
     const playbackToggle = document.getElementById('hostOnlyPlayback');
+    const visibilityToggle = document.getElementById('roomVisibilityToggle');
     videoToggle.classList.toggle('active', roomSettings.hostOnlyVideo);
     playbackToggle.classList.toggle('active', roomSettings.hostOnlyPlayback);
+    visibilityToggle?.classList.toggle('active', roomSettings.visibility === 'public');
     if (!userChangedSubtitleMode || isHost) {
       setSubtitleMode(roomSettings.subtitleMode, { broadcastChange: false, persistChoice: false });
     }
@@ -184,6 +204,151 @@ const ICE_SERVERS = {
     });
   }
 
+  // ===== Room Entry =====
+  let roomModalBound = false;
+
+  function initRoomEntry() {
+    bindRoomModal();
+    document.getElementById('openRoomBtn')?.addEventListener('click', () => openRoomModal({ force: true }));
+    document.getElementById('roomStartBtn')?.addEventListener('click', () => openRoomModal({ force: true }));
+    window.addEventListener('cineverse:auth-change', event => handleAuthChange(event.detail?.user || null));
+  }
+
+  function handleAuthChange(accountUser) {
+    const params = new URLSearchParams(window.location.search);
+    const createRoomIntent = params.get('createRoom') === '1';
+    const hasRoomIntent = Boolean(params.get('room')) || params.get('join') === 'true' || createRoomIntent;
+
+    if (accountUser) {
+      username = accountUser.username;
+      localStorage.setItem('cv-username', username);
+      document.getElementById('currentUser').textContent = 'User: ' + username;
+      if (createRoomIntent && !roomId) {
+        closeRoomModal();
+        startAsHost();
+      } else if (hasRoomIntent && !roomId) {
+        openRoomModal({ mode: 'join', force: true });
+      } else if (!roomId) {
+        closeRoomModal();
+      }
+      return;
+    }
+
+    if (!roomId) {
+      openRoomModal({ mode: hasRoomIntent ? 'join' : 'choose', force: true });
+    }
+  }
+
+  function bindRoomModal() {
+    if (roomModalBound) return;
+    roomModalBound = true;
+
+    const usernameInput = document.getElementById('usernameInput');
+    const joinRoomInput = document.getElementById('joinRoomInput');
+    const joinRoomField = document.getElementById('joinRoomField');
+    const createBtn = document.getElementById('createRoomBtn');
+    const joinBtn = document.getElementById('joinRoomBtn');
+
+    createBtn.addEventListener('click', () => {
+      const name = getRoomUsername();
+      if (!name) { usernameInput.focus(); return; }
+      username = name;
+      persistRoomUsername(name);
+      closeRoomModal();
+      document.getElementById('currentUser').textContent = 'User: ' + name;
+      startAsHost();
+    });
+
+    joinBtn.addEventListener('click', () => {
+      if (joinRoomField.style.display === 'none') {
+        joinRoomField.style.display = 'block';
+        joinRoomInput.focus();
+        return;
+      }
+      const name = getRoomUsername();
+      const code = joinRoomInput.value.trim();
+      if (!name) { usernameInput.focus(); return; }
+      if (!code) { joinRoomInput.focus(); return; }
+      username = name;
+      persistRoomUsername(name);
+      closeRoomModal();
+      document.getElementById('currentUser').textContent = 'User: ' + name;
+      joinRoom(code);
+    });
+  }
+
+  function openRoomModal(options = {}) {
+    if (roomId && options.force) {
+      selectTab('room');
+      showToast('Zaten bir odadasin');
+      return;
+    }
+
+    const modal = document.getElementById('welcomeModal');
+    const usernameInput = document.getElementById('usernameInput');
+    const usernameField = document.getElementById('usernameField');
+    const joinRoomInput = document.getElementById('joinRoomInput');
+    const joinRoomField = document.getElementById('joinRoomField');
+    const createBtn = document.getElementById('createRoomBtn');
+    const accountUser = window.CineVerseLibrary?.user || null;
+    const description = modal.querySelector('p');
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    const joinParam = params.get('join');
+    const mode = options.mode || (roomParam || joinParam === 'true' ? 'join' : 'choose');
+    const loggedIn = Boolean(accountUser);
+
+    usernameField.hidden = loggedIn;
+    if (description) {
+      description.textContent = loggedIn
+        ? 'Oda olusturabilir veya mevcut bir odaya katilabilirsin.'
+        : 'Izlemeye baslamak icin adini yaz ve bir oda olustur veya mevcut bir odaya katil.';
+    }
+    if (loggedIn) {
+      usernameInput.value = accountUser.username;
+    } else {
+      const savedName = localStorage.getItem('cv-username');
+      if (savedName) usernameInput.value = savedName;
+    }
+
+    joinRoomField.style.display = mode === 'join' ? 'block' : 'none';
+    createBtn.style.display = mode === 'join' ? 'none' : '';
+    if (roomParam) {
+      joinRoomField.style.display = 'block';
+      joinRoomInput.value = roomParam;
+      createBtn.style.display = 'none';
+    }
+    if (joinParam === 'true') {
+      joinRoomField.style.display = 'block';
+    }
+
+    modal.classList.add('open');
+    if (loggedIn && joinRoomField.style.display !== 'none') {
+      joinRoomInput.focus();
+    } else if (!loggedIn) {
+      usernameInput.focus();
+    }
+  }
+
+  function closeRoomModal() {
+    document.getElementById('welcomeModal')?.classList.remove('open');
+  }
+
+  function getRoomUsername() {
+    return window.CineVerseLibrary?.user?.username || document.getElementById('usernameInput').value.trim();
+  }
+
+  function persistRoomUsername(name) {
+    if (!window.CineVerseLibrary?.user) {
+      localStorage.setItem('cv-username', name);
+    }
+  }
+
+  function selectTab(tabName) {
+    const tab = document.querySelector(`.sidebar-tab[data-tab="${tabName}"]`);
+    if (tab) tab.click();
+  }
+
   // ===== PeerJS Room =====
   function generateRoomId() {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -192,10 +357,20 @@ const ICE_SERVERS = {
     return id;
   }
 
+  function generateRoomHostToken() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   function startAsHost() {
     isHost = true;
     stopSyncHeartbeat();
+    stopRoomRegistryHeartbeat();
     roomId = generateRoomId();
+    roomHostToken = generateRoomHostToken();
+    roomSettings.visibility = 'private';
+    applyRoomSettings(roomSettings);
     users = [{ name: username, peerId: roomId }];
 
     peer = new Peer(roomId, { config: ICE_SERVERS, debug: 1 });
@@ -206,6 +381,8 @@ const ICE_SERVERS = {
       ChatModule.displayMessage('', `${username} odayı oluşturdu`, true);
       updateUserList();
       startSyncHeartbeat();
+      syncRoomRegistry({ immediate: true });
+      window.dispatchEvent(new CustomEvent('cineverse:room-ready', { detail: { roomId, isHost: true } }));
     });
 
     peer.on('connection', (conn) => {
@@ -216,6 +393,7 @@ const ICE_SERVERS = {
           connections = connections.filter(c => c !== conn);
           users = users.filter(u => u.peerId !== conn.peer);
           updateUserList();
+          syncRoomRegistry({ immediate: true });
           broadcast({ type: 'users', users });
           ChatModule.displayMessage('', `Bir kullanıcı ayrıldı`, true);
         });
@@ -268,11 +446,14 @@ const ICE_SERVERS = {
       const user = { name: data.name, peerId: conn.peer };
       users.push(user);
       updateUserList();
+      syncRoomRegistry({ immediate: true });
       // Send full state to new user
       conn.send({
         type: 'init',
         users,
         videoUrl: document.getElementById('videoUrlInput').value,
+        contentId: currentRoomContent?.id || null,
+        contentTitle: currentRoomContent?.title || currentRoomContent?.name || null,
         currentTime: PlayerController.getCurrentTime(),
         paused: PlayerController.isPaused(),
         speed: PlayerController.getSpeed(),
@@ -304,8 +485,11 @@ const ICE_SERVERS = {
       // Apply action locally on host
       if (action === 'video') {
         document.getElementById('videoUrlInput').value = data.url;
+        currentRoomContent = data.contentId ? { id: data.contentId, url: data.url, title: data.contentTitle || '' } : null;
+        window.CineVerseLibrary?.setActiveContent(currentRoomContent);
         PlayerController.loadSource(data.url);
-        broadcast({ type: 'video', url: data.url });
+        syncRoomRegistry({ immediate: true });
+        broadcast({ type: 'video', url: data.url, contentId: data.contentId || null, contentTitle: data.contentTitle || null });
       } else {
         PlayerController.applySync(action, time);
         // Relay to ALL guests (including sender — they already applied locally)
@@ -465,6 +649,8 @@ const ICE_SERVERS = {
         }
         if (data.videoUrl) {
           document.getElementById('videoUrlInput').value = data.videoUrl;
+          currentRoomContent = data.contentId ? { id: data.contentId, url: data.videoUrl, title: data.contentTitle || '' } : null;
+          window.CineVerseLibrary?.setActiveContent(currentRoomContent);
           PlayerController.loadSource(data.videoUrl);
           // YouTube needs more time to load — retry sync until ready
           const isYT = /youtube\.com|youtu\.be/.test(data.videoUrl);
@@ -508,6 +694,8 @@ const ICE_SERVERS = {
       }
       if (data.type === 'video') {
         document.getElementById('videoUrlInput').value = data.url;
+        currentRoomContent = data.contentId ? { id: data.contentId, url: data.url, title: data.contentTitle || '' } : null;
+        window.CineVerseLibrary?.setActiveContent(currentRoomContent);
         PlayerController.loadSource(data.url);
       }
       if (data.type === 'settings') {
@@ -545,6 +733,159 @@ const ICE_SERVERS = {
     });
   }
 
+
+  function initActiveRooms() {
+    document.getElementById('refreshRoomsBtn')?.addEventListener('click', () => loadActiveRooms({ showLoading: true }));
+    loadActiveRooms({ showLoading: true });
+    activeRoomsTimer = setInterval(() => loadActiveRooms(), 15000);
+    window.addEventListener('beforeunload', () => {
+      if (isHost && roomSettings.visibility === 'public') unregisterRoom();
+    });
+  }
+
+  async function loadActiveRooms(options = {}) {
+    const list = document.getElementById('activeRoomsList');
+    if (!list) return;
+    if (options.showLoading) renderActiveRoomsMessage('Aktiv odalar yukleniyor...');
+
+    try {
+      const data = await roomApi('rooms');
+      renderActiveRooms(data.rooms || []);
+    } catch (err) {
+      renderActiveRoomsMessage(err.message || 'Aktiv odalar yuklenemedi');
+    }
+  }
+
+  function renderActiveRooms(rooms) {
+    const list = document.getElementById('activeRoomsList');
+    if (!list) return;
+    const visibleRooms = rooms;
+    if (!visibleRooms.length) {
+      renderActiveRoomsMessage('Aktiv public oda yok');
+      return;
+    }
+
+    list.innerHTML = visibleRooms.map(room => `
+      <button class="active-room-row" type="button" data-room-id="${escapeAttr(room.roomId)}">
+        <strong>${escapeHTML(room.contentTitle || 'Birlikte izleme odasi')}</strong>
+        <div class="active-room-meta">
+          <span class="active-room-pill">${escapeHTML(room.hostName || 'Host')}</span>
+          <span class="active-room-pill">${Number(room.memberCount || 1)} kisi</span>
+          <span class="active-room-pill">${escapeHTML(room.roomId)}</span>
+        </div>
+        <div class="active-room-content">${escapeHTML(room.contentTitle ? 'Oynatilan icerik' : 'Icerik henuz secilmedi')}</div>
+      </button>
+    `).join('');
+
+    list.querySelectorAll('[data-room-id]').forEach(button => {
+      button.addEventListener('click', () => joinPublicRoom(button.dataset.roomId));
+    });
+  }
+
+  function renderActiveRoomsMessage(message) {
+    const list = document.getElementById('activeRoomsList');
+    if (list) list.innerHTML = `<p class="empty-state">${escapeHTML(message)}</p>`;
+  }
+
+  function joinPublicRoom(publicRoomId) {
+    if (!publicRoomId) return;
+    if (roomId) {
+      showToast(roomId === publicRoomId ? 'Zaten bu odadasin' : 'Once mevcut odadan cikmalisin');
+      selectTab('room');
+      return;
+    }
+
+    const name = getRoomUsername();
+    if (!name) {
+      openRoomModal({ mode: 'join', force: false });
+      const input = document.getElementById('joinRoomInput');
+      if (input) {
+        input.value = publicRoomId;
+        input.focus();
+      }
+      return;
+    }
+
+    username = name;
+    persistRoomUsername(name);
+    document.getElementById('currentUser').textContent = 'User: ' + name;
+    joinRoom(publicRoomId);
+  }
+
+  function syncRoomRegistry(options = {}) {
+    if (!isHost || !roomId || !roomHostToken) return;
+
+    if (roomSettings.visibility !== 'public') {
+      stopRoomRegistryHeartbeat();
+      unregisterRoom();
+      loadActiveRooms();
+      return;
+    }
+
+    if (!roomRegistryTimer) {
+      roomRegistryTimer = setInterval(registerRoom, 20000);
+    }
+    if (options.immediate) registerRoom();
+  }
+
+  async function registerRoom() {
+    if (!isHost || !roomId || !roomHostToken || roomSettings.visibility !== 'public') return;
+
+    try {
+      await roomApi('rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          roomId,
+          hostName: username || 'Host',
+          hostToken: roomHostToken,
+          visibility: roomSettings.visibility,
+          memberCount: Math.max(1, users.length || 1),
+          contentTitle: getRoomContentTitle()
+        })
+      });
+      loadActiveRooms();
+    } catch (err) {
+      console.warn('Room registry failed:', err);
+    }
+  }
+
+  async function unregisterRoom() {
+    if (!roomId || !roomHostToken) return;
+    try {
+      await roomApi(`rooms/${encodeURIComponent(roomId)}`, {
+        method: 'DELETE',
+        keepalive: true,
+        body: JSON.stringify({ hostToken: roomHostToken })
+      });
+    } catch (err) {
+      console.warn('Room unregister failed:', err);
+    }
+  }
+
+  function stopRoomRegistryHeartbeat() {
+    if (roomRegistryTimer) {
+      clearInterval(roomRegistryTimer);
+      roomRegistryTimer = null;
+    }
+  }
+
+  function getRoomContentTitle() {
+    const title = currentRoomContent?.title || currentRoomContent?.name || '';
+    if (title) return title;
+    const url = document.getElementById('videoUrlInput')?.value.trim();
+    return url ? 'Manuel video' : '';
+  }
+
+  async function roomApi(path, options = {}) {
+    const response = await fetch(`/api/${path}`, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Islem basarisiz');
+    return data;
+  }
 
 
   function broadcast(data) {
@@ -614,18 +955,28 @@ const ICE_SERVERS = {
     loadBtn.addEventListener('click', () => {
       const url = urlInput.value.trim();
       if (!url) return;
+      window.CineVerseLibrary?.prepareManualLoad(url);
+      const selectedContent = window.CineVerseLibrary?.getSelectedForUrl(url) || null;
+      currentRoomContent = selectedContent;
+      window.CineVerseLibrary?.setActiveContent(selectedContent);
+      const contentTitle = selectedContent?.title || selectedContent?.name || '';
 
-      if (isHost) {
-        // Host: load locally + broadcast to all
+      if (isHost || !roomId) {
+        // Host or solo playback: load locally. Hosts also broadcast to guests.
         PlayerController.loadSource(url);
-        broadcast({ type: 'video', url });
-        showToast('Video yükleniyor... 🎬');
+        if (isHost) {
+          syncRoomRegistry({ immediate: true });
+          broadcast({ type: 'video', url, contentId: selectedContent?.id || null, contentTitle: contentTitle || null });
+        }
+        showToast('Video yukleniyor...');
       } else {
         // Guest: request from host
         if (connections[0] && connections[0].open) {
-          connections[0].send({ type: 'guest-sync', action: 'video', url });
+          connections[0].send({ type: 'guest-sync', action: 'video', url, contentId: selectedContent?.id || null, contentTitle: contentTitle || null });
+          showToast('Video degistirme istegi gonderildi...');
+        } else {
+          showToast('Oda baglantisi hazir degil');
         }
-        showToast('Video değiştirme isteği gönderildi...');
       }
     });
 
@@ -913,5 +1264,9 @@ const ICE_SERVERS = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHTML(str).replace(/"/g, '&quot;');
   }
 })();
