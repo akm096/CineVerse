@@ -238,7 +238,14 @@ const ICE_SERVERS = {
     chatToggle?.addEventListener('click', () => {
       setFullscreenChat(!appLayout.classList.contains('fullscreen-chat-open'));
     });
-    chatClose?.addEventListener('click', () => setFullscreenChat(false));
+    chatClose?.addEventListener('click', () => {
+      if (document.fullscreenElement) {
+        setFullscreenChat(false);
+      } else {
+        // Mobile non-fullscreen: switch to room tab
+        selectTab('room');
+      }
+    });
     settingsBtn?.addEventListener('click', () => {
       settingsPanel.hidden = !settingsPanel.hidden;
     });

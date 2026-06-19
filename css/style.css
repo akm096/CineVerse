@@ -534,9 +534,21 @@ button, input, select, textarea {
 /* ===== Desktop: always hide mobile-only UI elements ===== */
 @media (min-width: 601px), (hover: hover) and (pointer: fine) {
   .mobile-more-tab,
-  .mobile-more-menu,
+  .mobile-more-menu {
+    display: none !important;
+  }
+  /* Hide chat-header/settings on desktop UNLESS in fullscreen */
   .fullscreen-chat-header,
   .fullscreen-chat-settings {
+    display: none !important;
+  }
+  .app-layout:fullscreen .fullscreen-chat-header {
+    display: flex !important;
+  }
+  .app-layout:fullscreen .fullscreen-chat-settings {
+    display: grid !important;
+  }
+  .app-layout:fullscreen .fullscreen-chat-settings[hidden] {
     display: none !important;
   }
 }
@@ -1795,6 +1807,43 @@ button, input, select, textarea {
   .player-page .subtitle-overlay {
     bottom: 58px;
   }
+
+  /* Show chat header with settings/close buttons on mobile */
+  .player-page .fullscreen-chat-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 42px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card-solid);
+  }
+
+  .player-page .fullscreen-chat-header-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .player-page .fullscreen-chat-header-actions button {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    color: var(--text);
+    background: var(--bg-input);
+    font-size: 1.1rem;
+  }
+
+  .player-page .fullscreen-chat-settings {
+    display: grid !important;
+    gap: 9px;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card-solid);
+  }
+
+  .player-page .fullscreen-chat-settings[hidden] {
+    display: none !important;
+  }
 }
 
 /* ===== Fullscreen mobile chat ===== */
@@ -1898,7 +1947,7 @@ button, input, select, textarea {
   }
 
   .player-page .app-layout:fullscreen .fullscreen-chat-header {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     min-height: 48px;
@@ -1921,7 +1970,7 @@ button, input, select, textarea {
   }
 
   .player-page .app-layout:fullscreen .fullscreen-chat-settings {
-    display: grid;
+    display: grid !important;
     gap: 9px;
     padding: 10px;
     border-bottom: 1px solid var(--border);
@@ -1929,7 +1978,7 @@ button, input, select, textarea {
   }
 
   .player-page .app-layout:fullscreen .fullscreen-chat-settings[hidden] {
-    display: none;
+    display: none !important;
   }
 
   .player-page .fullscreen-chat-settings label {

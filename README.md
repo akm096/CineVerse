@@ -10,15 +10,14 @@ Repository: https://github.com/akm096/CineVerse
 
 ## Current Version
 
-`v1.3.7`
+`v1.3.8`
 
 ## Latest Changes
 
-- Added protection so site admins cannot be banned, kicked, or muted in rooms.
-- Added a "Banlananlar" (Banned users) tab for room managers to view and unban room members.
-- Synced the banned list across the P2P connection to all room managers.
-- Fixed desktop UI issues by hiding mobile-only elements on wider screens and eliminating empty bottom space.
-- Added room moderation roles, mute, kick and ban controls in `v1.3.5`.
+- Fixed mobile chat header: settings (⚙) and close (×) buttons now visible on mobile non-fullscreen mode.
+- Used `!important` overrides so fullscreen chat UI is never hidden by the desktop force-hide rule.
+- Close button on mobile non-fullscreen switches to Room tab instead of toggling fullscreen chat.
+- Previous: Added admin ban protection, banned users tab, desktop UI cleanup (v1.3.7).
 
 ## Features
 
