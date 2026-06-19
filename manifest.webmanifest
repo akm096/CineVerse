@@ -1,0 +1,47 @@
+{
+  "id": "/player.html",
+  "name": "CineVerse",
+  "short_name": "CineVerse",
+  "description": "Dostlarınla birlikdə sinxron video izlə və söhbət et.",
+  "lang": "az",
+  "start_url": "/player.html",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0a0a12",
+  "theme_color": "#16162a",
+  "categories": ["entertainment", "video", "social"],
+  "icons": [
+    {
+      "src": "/icons/cineverse-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/cineverse-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/cineverse-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Otaq yarat",
+      "short_name": "Otaq yarat",
+      "url": "/player.html"
+    },
+    {
+      "name": "Otağa qoşul",
+      "short_name": "Qoşul",
+      "url": "/player.html?join=true"
+    }
+  ]
+}

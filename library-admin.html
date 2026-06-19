@@ -3,26 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>CineVerse - Kutuphane Yonetimi</title>
-  <meta name="description" content="CineVerse admin ve uploader kutuphane yonetimi.">
+  <meta name="theme-color" content="#16162a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CineVerse">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/cineverse-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/cineverse-192.png">
+  <title>CineVerse - Kitabxana İdarəsi</title>
+  <meta name="description" content="CineVerse admin və uploader kitabxana idarəsi.">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="modal-backdrop" id="loginModal">
     <div class="modal">
       <h2>CineVerse Hesabi</h2>
-      <p>Yonetim sayfasina devam etmek icin giris yap.</p>
+      <p>İdarə panelinə davam etmək üçün daxil ol.</p>
       <div class="modal-field">
-        <label for="loginUsername">Kullanici adi</label>
+        <label for="loginUsername">İstifadəçi adı</label>
         <input type="text" id="loginUsername" class="input-field" autocomplete="username">
       </div>
       <div class="modal-field">
-        <label for="loginPassword">Sifre</label>
+        <label for="loginPassword">Şifrə</label>
         <input type="password" id="loginPassword" class="input-field" autocomplete="current-password">
       </div>
       <div class="modal-actions">
-        <button class="btn btn-primary" id="loginSubmitBtn" type="button">Giris yap</button>
-        <button class="btn btn-secondary" id="closeLoginBtn" type="button">Kapat</button>
+        <button class="btn btn-primary" id="loginSubmitBtn" type="button">Daxil ol</button>
+        <button class="btn btn-secondary" id="closeLoginBtn" type="button">Bağla</button>
       </div>
     </div>
   </div>
@@ -37,34 +45,34 @@
         <div class="theme-toggle" id="themeToggle" title="Tema Degistir"></div>
         <a href="player.html" class="btn btn-secondary btn-sm">Oynatici</a>
         <span id="authStatus" class="auth-status">Kontrol ediliyor</span>
-        <button class="btn btn-secondary btn-sm" id="openLoginBtn" type="button">Giris</button>
-        <button class="btn btn-secondary btn-sm" id="logoutBtn" type="button" hidden>Cikis</button>
+        <button class="btn btn-secondary btn-sm" id="openLoginBtn" type="button">Giriş</button>
+        <button class="btn btn-secondary btn-sm" id="logoutBtn" type="button" hidden>Çıxış</button>
       </div>
     </div>
   </nav>
 
   <main class="admin-page container">
     <section id="accessGate" class="admin-hero">
-      <h1>Kutuphane Yonetimi</h1>
+      <h1>Kitabxana İdarəsi</h1>
       <p id="accessMessage">Oturum kontrol ediliyor.</p>
-      <button class="btn btn-primary" id="gateLoginBtn" type="button">Giris yap</button>
+      <button class="btn btn-primary" id="gateLoginBtn" type="button">Daxil ol</button>
     </section>
 
     <section id="adminWorkspace" hidden>
       <div class="admin-page-header">
         <div>
-          <h1>Kutuphane Yonetimi</h1>
-          <p>Dizi ust kaydi olustur, bolumleri sirali ekle ve kutuphaneyi temiz tut.</p>
+          <h1>Kitabxana İdarəsi</h1>
+          <p>Serial qeydi yarat, bölümləri sırayla əlavə et və kitabxananı təmiz saxla.</p>
         </div>
-        <button class="btn btn-secondary btn-sm" id="adminRefreshAllBtn" type="button">Yenile</button>
+        <button class="btn btn-secondary btn-sm" id="adminRefreshAllBtn" type="button">Yenilə</button>
       </div>
 
-      <div class="admin-grid">
+      <div class="admin-grid" id="adminLibraryTools">
         <section class="admin-card">
-          <h2>Dizi Olustur</h2>
+          <h2>Serial Yarat</h2>
           <input type="hidden" id="seriesId">
           <input type="hidden" id="seriesTmdbId">
-          <input type="text" id="seriesTitle" class="input-field" placeholder="Dizi basligi">
+          <input type="text" id="seriesTitle" class="input-field" placeholder="Serial başlığı">
           <textarea id="seriesDescription" class="input-field" rows="4" placeholder="Aciklama"></textarea>
           <input type="text" id="seriesPosterUrl" class="input-field" placeholder="Poster URL">
           <div class="library-toolbar">
@@ -73,26 +81,27 @@
           </div>
           <div id="seriesTmdbResults" class="tmdb-results"></div>
           <div class="content-actions">
-            <button class="btn btn-primary btn-sm" id="seriesSaveBtn" type="button">Dizi olustur</button>
-            <button class="btn btn-secondary btn-sm" id="seriesCancelEditBtn" type="button" hidden>Vazgec</button>
+            <button class="btn btn-primary btn-sm" id="seriesSaveBtn" type="button">Serial yarat</button>
+            <button class="btn btn-secondary btn-sm" id="seriesCancelEditBtn" type="button" hidden>İmtina</button>
           </div>
         </section>
 
         <section class="admin-card">
-          <h2>Bolum Ekle</h2>
+          <h2>Bölüm Əlavə Et</h2>
           <input type="hidden" id="episodeContentId">
           <select id="episodeSeriesSelect" class="input-field"></select>
           <div class="library-toolbar">
             <input type="number" id="episodeSeason" class="input-field" placeholder="Sezon" min="0">
-            <input type="number" id="episodeNumber" class="input-field" placeholder="Bolum" min="0">
+            <input type="number" id="episodeNumber" class="input-field" placeholder="Bölüm" min="0">
           </div>
-          <input type="text" id="episodeTitle" class="input-field" placeholder="Bolum basligi (opsiyonel)">
+          <input type="text" id="episodeTitle" class="input-field" placeholder="Bölüm başlığı (istəyə bağlı)">
           <input type="text" id="episodePosterUrl" class="input-field" placeholder="Poster URL (opsiyonel)">
           <input type="text" id="episodeUrl" class="input-field" placeholder="Video linki">
-          <input type="text" id="episodeSubtitleUrl" class="input-field" placeholder="Altyazi linki (.srt, .vtt, opsiyonel)">
+          <input type="text" id="episodeSubtitleUrl" class="input-field" placeholder="Altyazı linki (.srt, .vtt, istəyə bağlı)">
+          <input type="text" id="episodeTags" class="input-field" placeholder="Tag-lar (vergüllə)">
           <div class="content-actions">
-            <button class="btn btn-primary btn-sm" id="episodeSaveBtn" type="button">Bolum ekle</button>
-            <button class="btn btn-secondary btn-sm" id="episodeCancelEditBtn" type="button" hidden>Vazgec</button>
+            <button class="btn btn-primary btn-sm" id="episodeSaveBtn" type="button">Bölüm əlavə et</button>
+            <button class="btn btn-secondary btn-sm" id="episodeCancelEditBtn" type="button" hidden>İmtina</button>
           </div>
         </section>
 
@@ -100,11 +109,13 @@
           <h2>Film Ekle</h2>
           <input type="hidden" id="movieContentId">
           <input type="hidden" id="movieTmdbId">
-          <input type="text" id="movieTitle" class="input-field" placeholder="Film basligi">
+          <input type="text" id="movieTitle" class="input-field" placeholder="Film başlığı">
           <textarea id="movieDescription" class="input-field" rows="3" placeholder="Aciklama"></textarea>
           <input type="text" id="moviePosterUrl" class="input-field" placeholder="Poster URL">
           <input type="text" id="movieUrl" class="input-field" placeholder="Video linki">
-          <input type="text" id="movieSubtitleUrl" class="input-field" placeholder="Altyazi linki (.srt, .vtt, opsiyonel)">
+          <input type="text" id="movieSubtitleUrl" class="input-field" placeholder="Altyazı linki (.srt, .vtt, istəyə bağlı)">
+          <input type="text" id="movieGenre" class="input-field" placeholder="Əsas janr">
+          <input type="text" id="movieTags" class="input-field" placeholder="Tag-lar (vergüllə)">
           <div class="library-toolbar">
             <input type="text" id="movieTmdbSearch" class="input-field" placeholder="TMDB film ara">
             <button class="btn btn-secondary btn-sm" id="movieTmdbBtn" type="button">TMDB</button>
@@ -117,38 +128,39 @@
         </section>
       </div>
 
-      <section class="admin-card management-card">
+      <section class="admin-card management-card" id="managementSection">
         <div class="management-header">
-          <h2>Kutuphane Yonet</h2>
+          <h2>Kitabxananı İdarə Et</h2>
           <div class="library-toolbar">
             <input type="text" id="manageSearch" class="input-field" placeholder="Ara">
             <select id="manageTypeFilter" class="mini-select">
-              <option value="">Hepsi</option>
+              <option value="">Hamısı</option>
               <option value="movie">Film</option>
-              <option value="series">Dizi</option>
+              <option value="series">Serial</option>
             </select>
           </div>
         </div>
         <div class="management-columns">
           <div>
-            <h3>Diziler</h3>
+            <h3>Seriallar</h3>
             <div id="seriesManagementList" class="admin-list"></div>
           </div>
           <div>
-            <h3>Film ve Bolumler</h3>
+            <h3>Filmlər və Bölümlər</h3>
             <div id="contentManagementList" class="admin-list"></div>
           </div>
         </div>
       </section>
 
       <section class="admin-card" id="pendingSection" hidden>
-        <h2>Bekleyen Oneriler</h2>
+        <h2>Gözləyən Təkliflər</h2>
         <div id="pendingList" class="admin-list"></div>
       </section>
     </section>
   </main>
 
   <div class="toast" id="toast"></div>
-  <script src="js/library-admin.js?v=1.2.6"></script>
+  <script src="js/library-admin.js?v=1.3.7"></script>
+  <script src="js/pwa.js?v=1.3.7"></script>
 </body>
 </html>

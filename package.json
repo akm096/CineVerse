@@ -1,9 +1,10 @@
 {
   "name": "cineverse",
-  "version": "1.2.6",
+  "version": "1.3.7",
   "description": "CineVerse — Birlikte video izleme uygulaması",
   "main": "index.html",
   "scripts": {
+    "verify": "node scripts/verify.mjs",
     "prepare:web": "node scripts/prepare-web.mjs",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",

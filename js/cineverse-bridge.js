@@ -1,5 +1,5 @@
 /**
- * CineVerse Android WebView bridge.
+ * CineVerse Android WebView bridge
  *
  * Android exposes `window.CineVerseBridge` through addJavascriptInterface().
  * This adapter keeps native chat and playback state connected to the web UI.
@@ -173,6 +173,7 @@
     PlayerController.applySync(shouldPlay ? 'play' : 'pause', time);
   }
 
+  // Called by Android through WebView.evaluateJavascript(...).
   window.onCineVerseChatMessageReceived = displayIncomingChat;
   window.syncCineVerseVideo = applyIncomingVideo;
 

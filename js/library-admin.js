@@ -20,7 +20,7 @@ const CineVerseLibraryAdmin = (() => {
       ...options
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Islem basarisiz');
+    if (!response.ok) throw new Error(data.error || 'Əməliyyat alınmadı');
     return data;
   }
 
@@ -47,7 +47,7 @@ const CineVerseLibraryAdmin = (() => {
     on('logoutBtn', 'click', async () => {
       await api('auth/logout', { method: 'POST' });
       state.user = null;
-      showToast('Cikis yapildi');
+      showToast('Çıxış edildi');
       updateAccess();
     });
   }
@@ -84,18 +84,20 @@ const CineVerseLibraryAdmin = (() => {
     const role = state.user?.role || 'guest';
     const allowed = canManage();
 
-    text('authStatus', loggedIn ? `${state.user.username} (${role})` : 'Misafir');
+    text('authStatus', loggedIn ? `${state.user.username} (${role})` : 'Qonaq');
     setHidden('openLoginBtn', loggedIn);
     setHidden('logoutBtn', !loggedIn);
     setHidden('adminWorkspace', !allowed);
     setHidden('accessGate', allowed);
-    setHidden('pendingSection', role !== 'admin');
+    setHidden('pendingSection', !isContentModerator());
+    setHidden('adminLibraryTools', role === 'moderator');
+    setHidden('managementSection', role === 'moderator');
 
     if (!loggedIn) {
-      text('accessMessage', 'Bu sayfa admin ve uploader hesaplari icindir.');
+      text('accessMessage', 'Bu səhifə admin, moderator və uploader hesabları üçündür.');
       setHidden('gateLoginBtn', false);
     } else if (!allowed) {
-      text('accessMessage', 'Bu hesap kutuphane yonetimine yetkili degil.');
+      text('accessMessage', 'Bu hesabın kitabxana idarəsi üçün səlahiyyəti yoxdur.');
       setHidden('gateLoginBtn', true);
     }
   }
@@ -103,9 +105,9 @@ const CineVerseLibraryAdmin = (() => {
   async function login() {
     const username = value('loginUsername');
     const password = value('loginPassword');
-    if (!username || !password) return showToast('Kullanici adi ve sifre gerekli');
+    if (!username || !password) return showToast('İstifadəçi adı və şifrə lazımdır');
 
-    setBusy('loginSubmitBtn', true, 'Giris yapiliyor...');
+    setBusy('loginSubmitBtn', true, 'Daxil olunur...');
     try {
       const data = await api('auth/login', {
         method: 'POST',
@@ -114,13 +116,13 @@ const CineVerseLibraryAdmin = (() => {
       state.user = data.user;
       closeModal('loginModal');
       setValue('loginPassword', '');
-      showToast(`${data.user.username} olarak giris yapildi`);
+      showToast(`${data.user.username} kimi daxil oldun`);
       updateAccess();
       if (canManage()) refreshAll();
     } catch (err) {
       showToast(err.message);
     } finally {
-      setBusy('loginSubmitBtn', false, 'Giris yap');
+      setBusy('loginSubmitBtn', false, 'Daxil ol');
     }
   }
 
@@ -139,9 +141,9 @@ const CineVerseLibraryAdmin = (() => {
 
     try {
       const [seriesData, contentsData, pendingData] = await Promise.all([
-        type === 'movie' ? Promise.resolve({ series: [] }) : api(`series?${seriesQuery}`),
-        api(`contents?${contentsQuery}`),
-        state.user?.role === 'admin' ? api('admin/submissions') : Promise.resolve({ submissions: [] })
+        canManageLibrary() && type !== 'movie' ? api(`series?${seriesQuery}`) : Promise.resolve({ series: [] }),
+        canManageLibrary() ? api(`contents?${contentsQuery}`) : Promise.resolve({ contents: [] }),
+        isContentModerator() ? api('admin/submissions') : Promise.resolve({ submissions: [] })
       ]);
       state.series = seriesData.series || [];
       state.contents = contentsData.contents || [];
@@ -162,13 +164,13 @@ const CineVerseLibraryAdmin = (() => {
       posterUrl: value('seriesPosterUrl'),
       tmdbId: value('seriesTmdbId')
     };
-    if (!payload.title) return showToast('Dizi basligi gerekli');
+    if (!payload.title) return showToast('Serial başlığı lazımdır');
 
     try {
       const path = id ? `series/${encodeURIComponent(id)}` : 'series';
       const method = id ? 'PATCH' : 'POST';
       await api(path, { method, body: JSON.stringify(payload) });
-      showToast(id ? 'Dizi guncellendi' : 'Dizi olusturuldu');
+      showToast(id ? 'Serial yeniləndi' : 'Serial yaradıldı');
       clearSeriesForm();
       await refreshAll();
     } catch (err) {
@@ -188,12 +190,13 @@ const CineVerseLibraryAdmin = (() => {
       title: value('episodeTitle'),
       url: urlValue('episodeUrl'),
       subtitleUrl: urlValue('episodeSubtitleUrl'),
+      tags: value('episodeTags'),
       description: original?.description || '',
       posterUrl: value('episodePosterUrl') || original?.posterUrl || '',
       tmdbId: original?.tmdbId || ''
     };
-    if (!seriesId) return showToast('Dizi sec');
-    if (!payload.season || !payload.episode || !payload.url) return showToast('Sezon, bolum ve link gerekli');
+    if (!seriesId) return showToast('Serial seç');
+    if (!payload.season || !payload.episode || !payload.url) return showToast('Sezon, bölüm və link lazımdır');
 
     try {
       if (editId) {
@@ -201,13 +204,13 @@ const CineVerseLibraryAdmin = (() => {
           method: 'PATCH',
           body: JSON.stringify(payload)
         });
-        showToast('Bolum guncellendi');
+        showToast('Bölüm yeniləndi');
       } else {
         await api(`series/${encodeURIComponent(seriesId)}/episodes`, {
           method: 'POST',
           body: JSON.stringify(payload)
         });
-        showToast('Bolum eklendi');
+        showToast('Bölüm əlavə edildi');
       }
       clearEpisodeForm();
       await refreshAll();
@@ -225,9 +228,11 @@ const CineVerseLibraryAdmin = (() => {
       posterUrl: value('moviePosterUrl'),
       url: urlValue('movieUrl'),
       subtitleUrl: urlValue('movieSubtitleUrl'),
-      tmdbId: value('movieTmdbId')
+      tmdbId: value('movieTmdbId'),
+      genre: value('movieGenre'),
+      tags: value('movieTags')
     };
-    if (!payload.url) return showToast('Film linki gerekli');
+    if (!payload.url) return showToast('Film linki lazımdır');
 
     try {
       if (editId) {
@@ -258,7 +263,7 @@ const CineVerseLibraryAdmin = (() => {
     try {
       const data = await api(`tmdb/search?type=${isSeries ? 'series' : 'movie'}&q=${encodeURIComponent(q)}`);
       if (data.disabled) return renderEmpty(resultsId, 'TMDB anahtari ayarli degil');
-      if (!data.results?.length) return renderEmpty(resultsId, 'Sonuc bulunamadi');
+      if (!data.results?.length) return renderEmpty(resultsId, 'Nəticə tapılmadı');
 
       const list = byId(resultsId);
       list.innerHTML = data.results.map(item => `
@@ -281,6 +286,8 @@ const CineVerseLibraryAdmin = (() => {
             setValue('movieDescription', item.description);
             setValue('moviePosterUrl', item.posterUrl);
             setValue('movieTmdbId', item.tmdbId);
+            setValue('movieGenre', item.genre);
+            setValue('movieTags', (item.tags || []).join(', '));
           }
           renderEmpty(resultsId, 'Bilgiler forma dolduruldu');
         });
@@ -295,7 +302,7 @@ const CineVerseLibraryAdmin = (() => {
     if (!select) return;
     select.innerHTML = state.series.length
       ? state.series.map(item => `<option value="${escapeAttr(item.id)}">${escapeHTML(item.title)}</option>`).join('')
-      : '<option value="">Once dizi olustur</option>';
+      : '<option value="">Əvvəl serial yarat</option>';
   }
 
   function renderManagement() {
@@ -306,15 +313,15 @@ const CineVerseLibraryAdmin = (() => {
   function renderSeriesManagement() {
     const list = byId('seriesManagementList');
     if (!list) return;
-    if (!state.series.length) return renderEmpty('seriesManagementList', 'Dizi yok');
+    if (!state.series.length) return renderEmpty('seriesManagementList', 'Serial yoxdur');
 
     list.innerHTML = state.series.map(item => `
       <div class="admin-row stacked admin-media-row">
         <div class="admin-row-main">
-          ${posterMarkup(item, 'Dizi')}
+          ${posterMarkup(item, 'Serial')}
           <div>
             <strong>${escapeHTML(item.title)}</strong>
-            <span>${Number(item.episodeCount || item.episodes?.length || 0)} bolum</span>
+            <span>${Number(item.episodeCount || item.episodes?.length || 0)} bölüm</span>
             ${item.description ? `<small>${escapeHTML(item.description)}</small>` : ''}
           </div>
         </div>
@@ -336,21 +343,24 @@ const CineVerseLibraryAdmin = (() => {
   function renderContentManagement() {
     const list = byId('contentManagementList');
     if (!list) return;
-    if (!state.contents.length) return renderEmpty('contentManagementList', 'Icerik yok');
+    if (!state.contents.length) return renderEmpty('contentManagementList', 'Kontent yoxdur');
 
     list.innerHTML = state.contents.map(item => `
       <div class="admin-row stacked admin-media-row">
         <div class="admin-row-main">
-          ${posterMarkup(item, item.type === 'series' ? 'Bolum' : 'Film')}
+          ${posterMarkup(item, item.type === 'series' ? 'Bölüm' : 'Film')}
           <div>
             <strong>${escapeHTML(item.title || item.url)}</strong>
             <span>${escapeHTML(contentMeta(item))}</span>
-            ${item.subtitleUrl ? '<span>Altyazi var</span>' : ''}
+            ${item.subtitleUrl ? '<span>Altyazı var</span>' : ''}
+            ${item.genre || item.tags?.length ? `<span>${escapeHTML([item.genre, ...(item.tags || [])].filter(Boolean).join(' / '))}</span>` : ''}
+            <span>Yoxlama: ${escapeHTML(item.checkStatus || 'pending')}</span>
             <small>${escapeHTML(item.url)}</small>
           </div>
         </div>
         <div class="content-actions">
-          <button class="btn btn-primary btn-sm" data-room-content="${escapeAttr(item.id)}">Oda kur</button>
+          <button class="btn btn-primary btn-sm" data-room-content="${escapeAttr(item.id)}">Otaq qur</button>
+          <button class="btn btn-secondary btn-sm" data-check-content="${escapeAttr(item.id)}">Link yoxla</button>
           <button class="btn btn-secondary btn-sm" data-copy-content="${escapeAttr(item.id)}">Link kopyala</button>
           ${canManage() ? `<button class="btn btn-secondary btn-sm" data-edit-content="${escapeAttr(item.id)}">Duzenle</button>` : ''}
           ${state.user?.role === 'admin' ? `<button class="btn btn-secondary btn-sm danger-btn" data-delete-content="${escapeAttr(item.id)}">Sil</button>` : ''}
@@ -370,6 +380,9 @@ const CineVerseLibraryAdmin = (() => {
     list.querySelectorAll('[data-edit-content]').forEach(button => {
       button.addEventListener('click', () => startContentEdit(button.dataset.editContent));
     });
+    list.querySelectorAll('[data-check-content]').forEach(button => {
+      button.addEventListener('click', () => checkContent(button.dataset.checkContent));
+    });
     list.querySelectorAll('[data-delete-content]').forEach(button => {
       button.addEventListener('click', () => deleteContent(button.dataset.deleteContent));
     });
@@ -377,22 +390,26 @@ const CineVerseLibraryAdmin = (() => {
 
   function renderPending() {
     const list = byId('pendingList');
-    if (!list || state.user?.role !== 'admin') return;
-    if (!state.pending.length) return renderEmpty('pendingList', 'Bekleyen oneriler yok');
+    if (!list || !isContentModerator()) return;
+    if (!state.pending.length) return renderEmpty('pendingList', 'Gözləyən təklif yoxdur');
 
     list.innerHTML = state.pending.map(item => `
       <div class="admin-row stacked admin-media-row">
         <div class="admin-row-main">
-          ${posterMarkup(item, item.type === 'series' ? 'Dizi' : 'Film')}
+          ${posterMarkup(item, item.type === 'series' ? 'Serial' : 'Film')}
           <div>
             <strong>${escapeHTML(item.title || item.url)}</strong>
-            <span>${escapeHTML(item.submittedByName || 'Kullanici')} tarafindan</span>
+            <span>${escapeHTML(item.submittedByName || 'İstifadəçi')} tərəfindən</span>
+            ${item.moderationNote ? `<span>Qeyd: ${escapeHTML(item.moderationNote)}</span>` : ''}
+            <span>Yoxlama: ${escapeHTML(item.checkStatus || 'pending')}</span>
             <small>${escapeHTML(item.url)}</small>
           </div>
         </div>
         <div class="content-actions">
-          <button class="btn btn-primary btn-sm" data-approve="${escapeAttr(item.id)}">Onayla</button>
-          <button class="btn btn-secondary btn-sm" data-reject="${escapeAttr(item.id)}">Reddet</button>
+          <button class="btn btn-primary btn-sm" data-approve="${escapeAttr(item.id)}">Təsdiqlə</button>
+          <button class="btn btn-secondary btn-sm" data-note="${escapeAttr(item.id)}">Qeyd yaz</button>
+          <button class="btn btn-secondary btn-sm" data-check-content="${escapeAttr(item.id)}">Link yoxla</button>
+          <button class="btn btn-secondary btn-sm" data-reject="${escapeAttr(item.id)}">Rədd et</button>
         </div>
       </div>
     `).join('');
@@ -401,6 +418,12 @@ const CineVerseLibraryAdmin = (() => {
     });
     list.querySelectorAll('[data-reject]').forEach(button => {
       button.addEventListener('click', () => moderate(button.dataset.reject, 'reject'));
+    });
+    list.querySelectorAll('[data-note]').forEach(button => {
+      button.addEventListener('click', () => addNote(button.dataset.note));
+    });
+    list.querySelectorAll('[data-check-content]').forEach(button => {
+      button.addEventListener('click', () => checkContent(button.dataset.checkContent));
     });
   }
 
@@ -412,13 +435,13 @@ const CineVerseLibraryAdmin = (() => {
     setValue('seriesDescription', item.description || '');
     setValue('seriesPosterUrl', item.posterUrl || '');
     setValue('seriesTmdbId', item.tmdbId || '');
-    text('seriesSaveBtn', 'Dizi guncelle');
+    text('seriesSaveBtn', 'Serialı yenilə');
     setHidden('seriesCancelEditBtn', false);
     byId('seriesTitle')?.focus();
   }
 
   function startContentEdit(id) {
-    if (!canManage()) return showToast('Duzenleme icin admin veya uploader yetkisi gerekli');
+    if (!canManage()) return showToast('Düzəliş üçün səlahiyyət lazımdır');
     const item = state.contents.find(row => row.id === id);
     if (!item) return;
 
@@ -431,7 +454,8 @@ const CineVerseLibraryAdmin = (() => {
       setValue('episodePosterUrl', item.posterUrl || '');
       setValue('episodeUrl', item.url || '');
       setValue('episodeSubtitleUrl', item.subtitleUrl || '');
-      text('episodeSaveBtn', 'Bolum guncelle');
+      setValue('episodeTags', (item.tags || []).join(', '));
+      text('episodeSaveBtn', 'Bölümü yenilə');
       setHidden('episodeCancelEditBtn', false);
       byId('episodeUrl')?.focus();
       return;
@@ -444,6 +468,8 @@ const CineVerseLibraryAdmin = (() => {
     setValue('movieUrl', item.url || '');
     setValue('movieSubtitleUrl', item.subtitleUrl || '');
     setValue('movieTmdbId', item.tmdbId || '');
+    setValue('movieGenre', item.genre || '');
+    setValue('movieTags', (item.tags || []).join(', '));
     text('movieSaveBtn', 'Film guncelle');
     setHidden('movieCancelEditBtn', false);
     byId('movieUrl')?.focus();
@@ -452,18 +478,18 @@ const CineVerseLibraryAdmin = (() => {
   function clearSeriesForm() {
     ['seriesId', 'seriesTitle', 'seriesDescription', 'seriesPosterUrl', 'seriesTmdbId', 'seriesTmdbSearch'].forEach(id => setValue(id, ''));
     renderEmpty('seriesTmdbResults', '');
-    text('seriesSaveBtn', 'Dizi olustur');
+    text('seriesSaveBtn', 'Serial yarat');
     setHidden('seriesCancelEditBtn', true);
   }
 
   function clearEpisodeForm() {
-    ['episodeContentId', 'episodeSeason', 'episodeNumber', 'episodeTitle', 'episodePosterUrl', 'episodeUrl', 'episodeSubtitleUrl'].forEach(id => setValue(id, ''));
-    text('episodeSaveBtn', 'Bolum ekle');
+    ['episodeContentId', 'episodeSeason', 'episodeNumber', 'episodeTitle', 'episodePosterUrl', 'episodeUrl', 'episodeSubtitleUrl', 'episodeTags'].forEach(id => setValue(id, ''));
+    text('episodeSaveBtn', 'Bölüm əlavə et');
     setHidden('episodeCancelEditBtn', true);
   }
 
   function clearMovieForm() {
-    ['movieContentId', 'movieTitle', 'movieDescription', 'moviePosterUrl', 'movieUrl', 'movieSubtitleUrl', 'movieTmdbId', 'movieTmdbSearch'].forEach(id => setValue(id, ''));
+    ['movieContentId', 'movieTitle', 'movieDescription', 'moviePosterUrl', 'movieUrl', 'movieSubtitleUrl', 'movieTmdbId', 'movieTmdbSearch', 'movieGenre', 'movieTags'].forEach(id => setValue(id, ''));
     renderEmpty('movieTmdbResults', '');
     text('movieSaveBtn', 'Film ekle');
     setHidden('movieCancelEditBtn', true);
@@ -471,17 +497,17 @@ const CineVerseLibraryAdmin = (() => {
 
   function startRoomWithContent(id) {
     const item = state.contents.find(row => row.id === id);
-    if (!item?.url) return showToast('Medya linki bulunamadi');
+    if (!item?.url) return showToast('Media linki tapılmadı');
 
     sessionStorage.setItem('cv-admin-room-content', JSON.stringify(item));
     window.location.href = 'player.html?createRoom=1';
   }
 
   async function deleteSeries(id) {
-    if (!confirm('Dizi ve bagli bolumler kalici olarak silinsin mi?')) return;
+    if (!confirm('Serial və bağlı bölümlər qalıcı silinsin?')) return;
     try {
       await api(`series/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      showToast('Dizi silindi');
+      showToast('Serial silindi');
       await refreshAll();
     } catch (err) {
       showToast(err.message);
@@ -489,10 +515,10 @@ const CineVerseLibraryAdmin = (() => {
   }
 
   async function deleteContent(id) {
-    if (!confirm('Icerik kalici olarak silinsin mi?')) return;
+    if (!confirm('Kontent qalıcı silinsin?')) return;
     try {
       await api(`contents/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      showToast('Icerik silindi');
+      showToast('Kontent silindi');
       await refreshAll();
     } catch (err) {
       showToast(err.message);
@@ -501,8 +527,39 @@ const CineVerseLibraryAdmin = (() => {
 
   async function moderate(id, action) {
     try {
-      await api(`admin/submissions/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
-      showToast(action === 'approve' ? 'Oneri onaylandi' : 'Oneri reddedildi');
+      const reason = action === 'reject' ? (prompt('Rədd səbəbi') || '') : '';
+      await api(`admin/submissions/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+      showToast(action === 'approve' ? 'Təklif təsdiqləndi' : 'Təklif rədd edildi');
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function addNote(id) {
+    const note = prompt('Moderasiya qeydi');
+    if (!note) return;
+    try {
+      await api(`contents/${encodeURIComponent(id)}/moderation-notes`, {
+        method: 'POST',
+        body: JSON.stringify({ note })
+      });
+      showToast('Qeyd saxlanıldı');
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function checkContent(id) {
+    try {
+      showToast('Linklər yoxlanılır...');
+      const data = await api(`admin/contents/${encodeURIComponent(id)}/check`, { method: 'POST' });
+      const failed = (data.checks || []).filter(item => item.status === 'failed').length;
+      showToast(failed ? `${failed} yoxlama uğursuz oldu` : 'Link yoxlaması tamamlandı');
       await refreshAll();
     } catch (err) {
       showToast(err.message);
@@ -510,7 +567,7 @@ const CineVerseLibraryAdmin = (() => {
   }
 
   function contentMeta(item) {
-    const type = item.type === 'series' ? 'Bolum' : 'Film';
+    const type = item.type === 'series' ? 'Bölüm' : 'Film';
     return [
       type,
       item.season ? `S${item.season}` : '',
@@ -534,7 +591,15 @@ const CineVerseLibraryAdmin = (() => {
   }
 
   function canManage() {
+    return ['admin', 'uploader', 'moderator'].includes(state.user?.role);
+  }
+
+  function canManageLibrary() {
     return ['admin', 'uploader'].includes(state.user?.role);
+  }
+
+  function isContentModerator() {
+    return ['admin', 'moderator'].includes(state.user?.role);
   }
 
   function setBusy(id, busy, label) {

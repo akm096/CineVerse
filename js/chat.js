@@ -23,6 +23,7 @@ const ChatModule = (() => {
   let lastMessageGroup = null;
   let messageSeq = 0;
   let typingTimer = null;
+  let muted = false;
   const typingUsers = new Map();
 
   function init() {
@@ -124,6 +125,10 @@ const ChatModule = (() => {
   }
 
   function sendMessage() {
+    if (muted) {
+      showToast('Otaqda susturulmusan');
+      return;
+    }
     const chatInput = document.getElementById('chatInput');
     const text = chatInput.value.trim();
     if (!text) return;
@@ -138,6 +143,10 @@ const ChatModule = (() => {
   }
 
   function sendImage(file) {
+    if (muted) {
+      showToast('Otaqda susturulmusan');
+      return;
+    }
     if (!file.type.startsWith('image/')) {
       showToast('Sadece görsel dosyası seçilebilir');
       return;
@@ -281,8 +290,13 @@ const ChatModule = (() => {
     // Auto-scroll
     container.scrollTop = container.scrollHeight;
 
-    // Play notification sound for incoming messages
-    if (playSound) playNotifSound();
+    // Play notification sound and notify the fullscreen mobile UI.
+    if (playSound) {
+      playNotifSound();
+      window.dispatchEvent(new CustomEvent('cineverse:chat-incoming', {
+        detail: { name, text, image: Boolean(image), messageId }
+      }));
+    }
   }
 
   function createMessageItem(name, text, image, reply, timeStr, isOwn, messageId) {
@@ -475,5 +489,24 @@ const ChatModule = (() => {
   function onReaction(cb) { reactionCallback = cb; }
   function onEdit(cb) { editCallback = cb; }
 
-  return { init, displayMessage, onSend, onImageSend, onTyping, onReaction, onEdit, setTyping, applyReaction, applyEdit };
+  function setMuted(value) {
+    muted = Boolean(value);
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendChatBtn');
+    const imageBtn = document.getElementById('chatImageBtn');
+    const emojiBtn = document.getElementById('emojiBtn');
+    if (chatInput) {
+      chatInput.disabled = muted;
+      chatInput.placeholder = muted ? 'Otaqda susturulmusan' : 'Mesaj yaz...';
+    }
+    if (sendBtn) sendBtn.disabled = muted;
+    if (imageBtn) imageBtn.disabled = muted;
+    if (emojiBtn) emojiBtn.disabled = muted;
+    if (muted) {
+      clearReply();
+      document.getElementById('emojiPicker')?.classList.remove('open');
+    }
+  }
+
+  return { init, displayMessage, onSend, onImageSend, onTyping, onReaction, onEdit, setTyping, applyReaction, applyEdit, setMuted };
 })();

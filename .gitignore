@@ -14,6 +14,6 @@ android/local.properties
 *.iml
 .vscode/
 
-# OS
-.DS_Store
-Thumbs.db
+
+# Wrangler
+.wrangler/

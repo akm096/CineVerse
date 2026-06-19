@@ -1,6 +1,6 @@
 /**
  * CineVerse — Video Player Controller
- * Supports: MP4 (native), M3U8/HLS (via hls.js), Google Drive (proxy), YouTube (IFrame API)
+ * Supports: MP4 (native), M3U8/HLS (via hls.js), Google Drive (proxy), YouTube (IFrame API), Sibnet resolver
  */
 const PlayerController = (() => {
   let video, hlsInstance;
@@ -10,6 +10,7 @@ const PlayerController = (() => {
   let syncCorrectionTimer = null;
   let syncStatusTimer = null;
   let syncStatusEl = null;
+  let controlsHideTimer = null;
 
   // YouTube state
   let ytPlayer = null;
@@ -29,13 +30,16 @@ const PlayerController = (() => {
     const muteBtn = document.getElementById('muteBtn');
     const speedSelect = document.getElementById('speedSelect');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const rewind5Btn = document.getElementById('rewind5Btn');
+    const rewind10Btn = document.getElementById('rewind10Btn');
     const forward10Btn = document.getElementById('forward10Btn');
     const videoContainer = document.getElementById('videoContainer');
+    const controlsBar = document.querySelector('.controls-bar');
+    const sourceBar = document.querySelector('.source-bar');
+    const appLayout = document.querySelector('.app-layout');
 
     // Play / Pause
     playPauseBtn.addEventListener('click', togglePlay);
-    rewind5Btn.addEventListener('click', () => seekBy(-5));
+    rewind10Btn.addEventListener('click', () => seekBy(-10));
     forward10Btn.addEventListener('click', () => seekBy(10));
     videoContainer.addEventListener('click', (e) => {
       // Don't toggle on YT iframe click (YouTube handles it internally)
@@ -118,12 +122,34 @@ const PlayerController = (() => {
     fullscreenBtn.addEventListener('click', toggleFullscreen);
 
     // Play state icon (native video)
-    video.addEventListener('play', () => { playPauseBtn.textContent = '⏸️'; });
-    video.addEventListener('pause', () => { playPauseBtn.textContent = '▶️'; });
+    video.addEventListener('play', () => {
+      playPauseBtn.textContent = '⏸️';
+      scheduleControlsAutoHide();
+    });
+    video.addEventListener('pause', () => {
+      playPauseBtn.textContent = '▶️';
+      revealFullscreenControls({ keepVisible: true });
+    });
+
+    [appLayout, videoContainer, controlsBar, sourceBar].forEach(element => {
+      element?.addEventListener('pointermove', () => revealFullscreenControls());
+      element?.addEventListener('touchstart', () => revealFullscreenControls(), { passive: true });
+    });
+    document.addEventListener('fullscreenchange', () => {
+      revealFullscreenControls();
+      if (!document.fullscreenElement) {
+        try {
+          screen.orientation?.unlock?.();
+        } catch (e) {
+          // Orientation unlock is optional.
+        }
+      }
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      revealFullscreenControls();
 
       if (isYouTube && ytPlayer && ytReady) {
         handleYTKeyboard(e);
@@ -224,16 +250,19 @@ const PlayerController = (() => {
   }
 
   function togglePlay() {
+    revealFullscreenControls();
     if (isYouTube && ytPlayer && ytReady) {
       const state = ytPlayer.getPlayerState();
       const playPauseBtn = document.getElementById('playPauseBtn');
       if (state === YT.PlayerState.PLAYING) {
         ytPlayer.pauseVideo();
         playPauseBtn.textContent = '▶️';
+        revealFullscreenControls({ keepVisible: true });
         emitSync('pause', ytPlayer.getCurrentTime());
       } else {
         ytPlayer.playVideo();
         playPauseBtn.textContent = '⏸️';
+        scheduleControlsAutoHide();
         emitSync('play', ytPlayer.getCurrentTime());
       }
       return;
@@ -241,9 +270,11 @@ const PlayerController = (() => {
 
     if (video.paused) {
       video.play();
+      scheduleControlsAutoHide();
       emitSync('play', video.currentTime);
     } else {
       video.pause();
+      revealFullscreenControls({ keepVisible: true });
       emitSync('pause', video.currentTime);
     }
   }
@@ -267,10 +298,49 @@ const PlayerController = (() => {
   function toggleFullscreen() {
     const appLayout = document.querySelector('.app-layout');
     if (!document.fullscreenElement) {
-      appLayout.requestFullscreen().catch(() => {});
+      appLayout.requestFullscreen().then(async () => {
+        revealFullscreenControls();
+        try {
+          await screen.orientation?.lock?.('landscape');
+        } catch (e) {
+          // Orientation lock is optional and unsupported in some browsers.
+        }
+      }).catch(() => {});
     } else {
       document.exitFullscreen();
     }
+  }
+
+  function revealFullscreenControls(options = {}) {
+    const appLayout = document.querySelector('.app-layout');
+    if (!appLayout) return;
+    appLayout.classList.remove('controls-hidden');
+    if (controlsHideTimer) {
+      clearTimeout(controlsHideTimer);
+      controlsHideTimer = null;
+    }
+    if (!options.keepVisible) scheduleControlsAutoHide();
+  }
+
+  function scheduleControlsAutoHide() {
+    const appLayout = document.querySelector('.app-layout');
+    if (!appLayout || !document.fullscreenElement) return;
+    if (!shouldAutoHideControls()) return;
+    if (controlsHideTimer) clearTimeout(controlsHideTimer);
+    controlsHideTimer = setTimeout(() => {
+      if (shouldAutoHideControls()) appLayout.classList.add('controls-hidden');
+    }, 2500);
+  }
+
+  function shouldAutoHideControls() {
+    if (!document.fullscreenElement) return false;
+    if (isEmbedFrameActive()) return true;
+    return !isPaused();
+  }
+
+  function isEmbedFrameActive() {
+    const frame = document.getElementById('gdriveFrame');
+    return Boolean(frame && frame.style.display !== 'none' && frame.src);
   }
 
   // ===== YouTube URL Detection =====
@@ -475,7 +545,7 @@ const PlayerController = (() => {
   /**
    * Load a video URL (auto-detects MP4, M3U8, Google Drive, YouTube)
    */
-  function loadSource(url) {
+  async function loadSource(url) {
     url = normalizeMediaUrl(url);
     // Destroy old HLS
     if (hlsInstance) {
@@ -508,14 +578,30 @@ const PlayerController = (() => {
       return;
     }
 
-    // Embed player detection (Abyss.to / Hydrax / custom domains)
-    if (isEmbedPlayer(url)) {
-      embedInIframe(url, 'Video oynatıcı yükleniyor... 🎬');
-      return;
+    if (isSibnetPageUrl(url)) {
+      try {
+        const resolvedUrl = await resolveSibnetUrl(url);
+        if (resolvedUrl && resolvedUrl !== url) {
+          loadSource(resolvedUrl);
+          return;
+        }
+      } catch (err) {
+        console.error('Sibnet resolve error:', err);
+        showToast(err.message || 'Sibnet linki alinamadi');
+        embedInIframe(url, 'Sibnet player acilir...');
+        return;
+      }
     }
 
     const mediaUrl = getMediaUrlInfo(url);
-    const isM3U8 = mediaUrl.pathname.includes('.m3u8') || mediaUrl.full.includes('m3u8');
+    const isM3U8 = isHlsUrl(mediaUrl);
+    const hlsUrl = isM3U8 ? getPlayableHlsUrl(url) : url;
+
+    // Embed player detection (Abyss.to / Hydrax / custom domains)
+    if (!isDirectMediaUrl(mediaUrl) && isEmbedPlayer(url)) {
+      embedInIframe(url, 'Video oynatıcı yükleniyor... 🎬');
+      return;
+    }
 
     if (isM3U8 && Hls.isSupported()) {
       isHLS = true;
@@ -523,7 +609,7 @@ const PlayerController = (() => {
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
       });
-      hlsInstance.loadSource(url);
+      hlsInstance.loadSource(hlsUrl);
       hlsInstance.attachMedia(video);
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().catch(() => {});
@@ -535,7 +621,7 @@ const PlayerController = (() => {
         }
       });
     } else if (isM3U8 && video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
+      video.src = hlsUrl;
       video.play().catch(() => {});
     } else {
       video.src = url;
@@ -560,6 +646,48 @@ const PlayerController = (() => {
         pathname: String(url || '').split('?')[0].toLowerCase()
       };
     }
+  }
+
+  function isHlsUrl(mediaUrl) {
+    return mediaUrl.pathname.includes('.m3u8') || mediaUrl.full.includes('m3u8');
+  }
+
+  function isDirectMediaUrl(mediaUrl) {
+    return isHlsUrl(mediaUrl) || /\.(mp4|webm|ogg|ogv|mov|m4v|mkv|avi)(?:$|[?#])/i.test(mediaUrl.full);
+  }
+
+  function getPlayableHlsUrl(url) {
+    try {
+      const source = new URL(url, window.location.href);
+      if (source.origin === window.location.origin) return source.href;
+      if (!/^https?:$/.test(source.protocol)) return url;
+      if (!/^https?:$/.test(window.location.protocol)) return url;
+      return `/hls?url=${encodeURIComponent(source.href)}`;
+    } catch {
+      return url;
+    }
+  }
+
+  function isSibnetPageUrl(url) {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (host !== 'video.sibnet.ru') return false;
+      if (isDirectMediaUrl(getMediaUrlInfo(url))) return false;
+      return /\/video\d+/i.test(parsed.pathname) || parsed.pathname.endsWith('/shell.php');
+    } catch {
+      return false;
+    }
+  }
+
+  async function resolveSibnetUrl(url) {
+    showToast('Sibnet linki hazirlanir...');
+    const response = await fetch(`/sibnet?url=${encodeURIComponent(url)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.url) {
+      throw new Error(data.error || 'Sibnet linki alinamadi');
+    }
+    return normalizeMediaUrl(data.url);
   }
 
   /**
@@ -595,6 +723,8 @@ const PlayerController = (() => {
    * Detect if URL is an embed player
    */
   function isEmbedPlayer(url) {
+    const mediaUrl = getMediaUrlInfo(url);
+    if (isDirectMediaUrl(mediaUrl)) return false;
     if (/abysscdn\.com|playhydrax\.com|abyss\.to/i.test(url)) return true;
     if (/\?v=[a-zA-Z0-9]+/.test(url)) {
       if (/youtube\.com|youtu\.be/.test(url)) return false;
@@ -611,6 +741,8 @@ const PlayerController = (() => {
     video.style.display = 'none';
     video.src = '';
     video.pause();
+    gdriveFrame.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+    gdriveFrame.setAttribute('allowfullscreen', '');
     gdriveFrame.src = embedUrl;
     gdriveFrame.style.display = 'block';
     showToast(toastMsg || 'Video yükleniyor... 🎬');
@@ -671,6 +803,7 @@ const PlayerController = (() => {
       }
       ytPlayer.playVideo();
       playPauseBtn.textContent = '⏸️';
+      scheduleControlsAutoHide();
     }
 
     if (action === 'pause') {
@@ -679,6 +812,7 @@ const PlayerController = (() => {
       }
       ytPlayer.pauseVideo();
       playPauseBtn.textContent = '▶️';
+      revealFullscreenControls({ keepVisible: true });
     }
   }
 

@@ -10,15 +10,15 @@ Repository: https://github.com/akm096/CineVerse
 
 ## Current Version
 
-`v1.2.6`
+`v1.3.7`
 
 ## Latest Changes
 
-- Added public/private room visibility controlled by the host.
-- Added an active public rooms list in the Room tab.
-- Added D1-backed active room registration with heartbeat cleanup.
-- Private rooms stay hidden from the public list but remain joinable by shared link.
-- Public room rows show host, room code, member count, and the current content label.
+- Added protection so site admins cannot be banned, kicked, or muted in rooms.
+- Added a "Banlananlar" (Banned users) tab for room managers to view and unban room members.
+- Synced the banned list across the P2P connection to all room managers.
+- Fixed desktop UI issues by hiding mobile-only elements on wider screens and eliminating empty bottom space.
+- Added room moderation roles, mute, kick and ban controls in `v1.3.5`.
 
 ## Features
 
@@ -29,7 +29,8 @@ Repository: https://github.com/akm096/CineVerse
 | Private rooms | New rooms default to private and only work through direct shared room links. |
 | Host controls | Host can decide whether guests may change video or playback state. |
 | Room visibility | Host can switch a room between public and private from room settings. |
-| Video sources | Supports MP4, M3U8/HLS, YouTube, Google Drive proxy links, and iframe-based embeds. |
+| Room labels | Hosts can add a room name and short description for the public room list. |
+| Video sources | Supports MP4, M3U8/HLS, YouTube, Google Drive proxy links, Sibnet page-link resolving, and iframe-based embeds. |
 | Playback tools | Play/pause, seek, volume, mute, speed from 0.25x to 3x, fullscreen. |
 | Subtitles | Load SRT, VTT, JSON, or ASS subtitles from file drag-drop or URL. |
 | Personal subtitles | Each user can keep their own subtitle selection without forcing it on others. |
@@ -45,10 +46,13 @@ Repository: https://github.com/akm096/CineVerse
 | Library admin page | `library-admin.html` provides series creation, episode upload, movie upload, search, filtering, and admin deletion. |
 | Admin thumbnails | TMDB/poster images are shown in the management lists as well as in the player library. |
 | Admin quick actions | Management rows can copy the media link, open the player with that media selected, and let admins edit existing movies or episodes. |
-| Signed media URLs | MP4 links with query parameters, such as Sibnet `video.mp4?st=...&e=...`, are preserved when added and played. |
+| Signed media URLs | MP4 links with query parameters are preserved; Sibnet page links are resolved at play time so short-lived `dv*.sibnet.ru/*.mp4?...` links do not need to be stored. |
 | Library subtitles | Movies and episodes can store an optional subtitle URL that auto-loads in the player. |
 | Watchlist | Logged-in users can save items as planned, watching, or watched. |
 | Continue watching | Logged-in progress is saved in D1; guests keep local progress on the device. |
+| Profile | Logged-in users can edit a display profile and see watch stats plus recent progress. |
+| Admin dashboard | Admin users can see user/content/pending/public-room counters in the player admin tab. |
+| API protection | Sensitive write endpoints have simple D1-backed rate limiting. |
 | Theme | Dark/light theme toggle with saved preference. |
 
 ## Quick Start
@@ -121,6 +125,7 @@ Local Android preparation:
 ```bash
 npm install
 npm run prepare:web
+npm run verify
 npx cap sync android
 ```
 
@@ -136,12 +141,16 @@ CineVerse/
 ├── gdrive-worker.js
 ├── functions/
 │   ├── proxy.js
+│   ├── hls.js
+│   ├── sibnet.js
 │   └── api/[[path]].js
 ├── migrations/
 │   ├── 0001_cineverse_library.sql
 │   ├── 0002_series_library.sql
 │   ├── 0003_content_subtitles.sql
-│   └── 0004_public_rooms.sql
+│   ├── 0004_public_rooms.sql
+│   ├── 0005_roadmap_foundation.sql
+│   └── 0006_quality_tables.sql
 ├── css/
 │   └── style.css
 └── js/
@@ -162,6 +171,7 @@ CineVerse/
 | `library-admin.html` | Admin/uploader library management page. |
 | `css/style.css` | App layout, themes, chat UI, subtitle UI, library UI, admin UI, and responsive behavior. |
 | `functions/api/[[path]].js` | Cloudflare Pages API for auth, library, series, watchlist, progress, public room registry, and admin actions. |
+| `functions/sibnet.js` | Cloudflare Pages resolver for Sibnet page links and current MP4 sources. |
 | `js/account.js` | Login state, player library, watchlist, progress, and player-side admin panel wiring. |
 | `js/app.js` | Room creation/joining, PeerJS sync, public/private room visibility, active room list, room settings, and subtitle sharing mode. |
 | `js/library-admin.js` | Dedicated library management UI logic. |
@@ -195,11 +205,14 @@ npx wrangler d1 execute cineverse-db --remote --file migrations/0001_cineverse_l
 npx wrangler d1 execute cineverse-db --remote --file migrations/0002_series_library.sql
 npx wrangler d1 execute cineverse-db --remote --file migrations/0003_content_subtitles.sql
 npx wrangler d1 execute cineverse-db --remote --file migrations/0004_public_rooms.sql
+npx wrangler d1 execute cineverse-db --remote --file migrations/0005_roadmap_foundation.sql
+npx wrangler d1 execute cineverse-db --remote --file migrations/0006_quality_tables.sql
+npx wrangler d1 execute cineverse-db --remote --file migrations/0007_moderator_role.sql
 ```
 
-If an existing database already has `0001`, `0002`, and `0003`, apply only `0004_public_rooms.sql`.
+If an existing database already has `0001` through `0006`, apply only `0007_moderator_role.sql`.
 
-The API also performs a small startup schema check for the `series` table, `contents.series_id`, `contents.subtitle_url`, and public `rooms` table, so existing deployments can recover if the D1 management command was not run before deploy. Running the migration explicitly is still recommended.
+The API also performs a small startup schema check for series, content metadata, profiles, notifications, public rooms, quality tables, and rate-limit tables, so existing deployments can recover if the D1 management command was not run before deploy. Running the migration explicitly is still recommended.
 
 Set these environment variables for the first admin account:
 

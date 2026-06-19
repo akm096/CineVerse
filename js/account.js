@@ -5,6 +5,10 @@ const CineVerseAccount = (() => {
     series: [],
     watchlist: [],
     progress: [],
+    profile: null,
+    notifications: [],
+    tags: [],
+    mySubmissions: [],
     selectedContent: null,
     activeContent: null,
     progressTimer: null
@@ -14,6 +18,8 @@ const CineVerseAccount = (() => {
     bindAuth();
     bindLibrary();
     bindAdmin();
+    bindProfile();
+    bindNotifications();
     refreshMe();
     refreshLibrary();
     loadAdminRoomContent();
@@ -27,7 +33,7 @@ const CineVerseAccount = (() => {
       ...options
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Islem basarisiz');
+    if (!response.ok) throw new Error(data.error || 'Əməliyyat alınmadı');
     return data;
   }
 
@@ -39,7 +45,7 @@ const CineVerseAccount = (() => {
       await api('auth/logout', { method: 'POST' });
       state.user = null;
       clearAccountData();
-      showToast('Cikis yapildi');
+      showToast('Çıxış edildi');
       updateAuthUI();
       refreshLibrary();
     });
@@ -52,7 +58,7 @@ const CineVerseAccount = (() => {
   async function login() {
     const username = value('loginUsername');
     const password = value('loginPassword');
-    if (!username || !password) return showToast('Kullanici adi ve sifre gerekli');
+    if (!username || !password) return showToast('İstifadəçi adı və şifrə lazımdır');
 
     setLoginBusy(true);
     try {
@@ -63,7 +69,7 @@ const CineVerseAccount = (() => {
       state.user = data.user;
       closeModal('loginModal');
       setValue('loginPassword', '');
-      showToast(`${data.user.username} olarak giris yapildi`);
+      showToast(`${data.user.username} kimi daxil oldun`);
       updateAuthUI();
       hydrateAccountData();
     } catch (err) {
@@ -92,21 +98,28 @@ const CineVerseAccount = (() => {
   function updateAuthUI() {
     const loggedIn = Boolean(state.user);
     const role = state.user?.role || 'guest';
+    const canModerate = ['admin', 'moderator'].includes(role);
     text('authStatus', loggedIn ? `${state.user.username} (${role})` : 'Misafir');
-    text('welcomeAuthStatus', loggedIn ? `${state.user.username} olarak giris yapildi` : 'Hesapsiz devam edebilirsin');
+    text('welcomeAuthStatus', loggedIn ? `${state.user.username} kimi daxil oldun` : 'Hesabsız davam edə bilərsən');
     setHidden('openLoginBtn', loggedIn);
     setHidden('welcomeLoginBtn', loggedIn);
     setHidden('openRoomBtn', !loggedIn);
     setHidden('logoutBtn', !loggedIn);
-    setHidden('adminTabBtn', role !== 'admin');
-    setHidden('libraryAdminLink', !['admin', 'uploader'].includes(role));
-    setHidden('adminOnlyHint', role === 'admin');
+    setHidden('adminTabBtn', !canModerate);
+    setHidden('libraryAdminLink', !['admin', 'uploader', 'moderator'].includes(role));
+    setHidden('adminOnlyHint', canModerate);
     setHidden('librarySubmitLoginHint', loggedIn);
     setHidden('librarySubmitForm', !loggedIn);
     setHidden('watchlistLoginHint', loggedIn);
     setHidden('watchlistContent', !loggedIn);
     setHidden('continueLoginHint', loggedIn);
-    setHidden('adminPanelContent', role !== 'admin');
+    setHidden('profileLoginHint', loggedIn);
+    setHidden('profileContent', !loggedIn);
+    setHidden('adminPanelContent', !canModerate);
+    setHidden('adminDashboardSection', role !== 'admin');
+    setHidden('adminCreateUserSection', role !== 'admin');
+    setHidden('adminUsersSection', role !== 'admin');
+    setHidden('notificationBtn', !loggedIn);
     window.dispatchEvent(new CustomEvent('cineverse:auth-change', { detail: { user: state.user } }));
   }
 
@@ -115,6 +128,9 @@ const CineVerseAccount = (() => {
       refreshWatchlist();
       refreshProgress();
       refreshLibrary();
+      refreshProfile();
+      refreshNotifications();
+      refreshMySubmissions();
     };
 
     if ('requestIdleCallback' in window) {
@@ -128,13 +144,16 @@ const CineVerseAccount = (() => {
     const button = byId('loginSubmitBtn');
     if (!button) return;
     button.disabled = isBusy;
-    button.textContent = isBusy ? 'Giris yapiliyor...' : 'Giris yap';
+    button.textContent = isBusy ? 'Daxil olunur...' : 'Daxil ol';
   }
 
   function clearAccountData() {
     state.watchlist = [];
     state.progress = [];
+    state.profile = null;
     renderEmpty('watchlistContent', '');
+    renderEmpty('profileStats', '');
+    renderEmpty('profileRecentList', '');
     refreshProgress();
   }
 
@@ -144,8 +163,96 @@ const CineVerseAccount = (() => {
       if (event.key === 'Enter') refreshLibrary();
     });
     on('libraryTypeFilter', 'change', refreshLibrary);
+    on('libraryTagFilter', 'change', refreshLibrary);
     on('contentSubmitBtn', 'click', submitContent);
     on('tmdbSearchBtn', 'click', searchTmdb);
+  }
+
+  function bindNotifications() {
+    on('notificationBtn', 'click', async () => {
+      const panel = byId('notificationPanel');
+      if (!panel) return;
+      const libraryTab = document.querySelector('.sidebar-tab[data-tab="library"]');
+      if (libraryTab && !document.getElementById('tab-library')?.classList.contains('active')) {
+        libraryTab.click();
+      }
+      panel.hidden = false;
+      await refreshNotifications();
+      requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    });
+    on('markNotificationsReadBtn', 'click', async () => {
+      try {
+        await api('notifications/read-all', { method: 'POST' });
+        await refreshNotifications();
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
+  }
+
+  async function refreshNotifications() {
+    if (!state.user) return;
+    try {
+      const data = await api('notifications');
+      state.notifications = data.notifications || [];
+      renderNotifications(data.unread || 0);
+    } catch {
+      state.notifications = [];
+      renderNotifications(0);
+    }
+  }
+
+  function renderNotifications(unread) {
+    const badge = byId('notificationBadge');
+    if (badge) {
+      badge.textContent = unread;
+      badge.hidden = unread < 1;
+    }
+    const list = byId('notificationList');
+    if (!list) return;
+    if (!state.notifications.length) return renderEmpty('notificationList', 'Bildiriş yoxdur');
+    list.innerHTML = state.notifications.map(item => `
+      <div class="compact-row ${item.readAt ? '' : 'unread-row'}">
+        <div>
+          <strong>${escapeHTML(item.title)}</strong>
+          <span>${escapeHTML(item.body || '')}</span>
+        </div>
+        ${item.readAt ? '' : `<button class="btn btn-secondary btn-sm" data-read-notification="${escapeAttr(item.id)}">Oxu</button>`}
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-read-notification]').forEach(button => {
+      button.addEventListener('click', async () => {
+        try {
+          await api(`notifications/${button.dataset.readNotification}/read`, { method: 'POST' });
+          await refreshNotifications();
+        } catch (err) {
+          showToast(err.message);
+        }
+      });
+    });
+  }
+
+  function addLocalNotification(notification) {
+    const item = {
+      id: `local-${Date.now()}`,
+      type: notification.type || 'local',
+      title: notification.title || 'Bildiriş',
+      body: notification.body || '',
+      readAt: null,
+      createdAt: new Date().toISOString()
+    };
+    state.notifications = [item, ...state.notifications].slice(0, 40);
+    renderNotifications(state.notifications.filter(row => !row.readAt).length);
+  }
+
+  function renderTagFilter() {
+    const select = byId('libraryTagFilter');
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">Tag</option>' + state.tags.map(item => `
+      <option value="${escapeAttr(item.tag)}">${escapeHTML(item.tag)} (${Number(item.count || 0)})</option>
+    `).join('');
+    select.value = [...select.options].some(option => option.value === current) ? current : '';
   }
 
   async function refreshLibrary() {
@@ -154,21 +261,28 @@ const CineVerseAccount = (() => {
     const q = value('librarySearchInput');
     if (type) query.set('type', type);
     if (q) query.set('q', q);
+    const tag = value('libraryTagFilter');
+    if (tag) query.set('tag', tag);
 
     try {
+      renderEmpty('libraryList', 'Yüklənir...');
       const seriesQuery = new URLSearchParams();
       seriesQuery.set('includeEpisodes', '1');
       if (q) seriesQuery.set('q', q);
+      if (tag) seriesQuery.set('tag', tag);
 
-      const [contentsData, seriesData] = await Promise.all([
+      const [contentsData, seriesData, tagsData] = await Promise.all([
         type === 'series'
           ? api(`contents?type=series${q ? `&q=${encodeURIComponent(q)}` : ''}`)
           : api(`contents${query.toString() ? `?${query}` : ''}`),
-        type === 'movie' ? Promise.resolve({ series: [] }) : api(`series?${seriesQuery}`)
+        type === 'movie' ? Promise.resolve({ series: [] }) : api(`series?${seriesQuery}`),
+        api('tags')
       ]);
 
       state.contents = contentsData.contents || [];
       state.series = seriesData.series || [];
+      state.tags = tagsData.tags || [];
+      renderTagFilter();
       renderContents();
     } catch (err) {
       renderEmpty('libraryList', err.message);
@@ -178,7 +292,7 @@ const CineVerseAccount = (() => {
   function renderContents() {
     const list = byId('libraryList');
     if (!list) return;
-    if (!state.contents.length && !state.series.length) return renderEmpty('libraryList', 'Kutuphane bos');
+    if (!state.contents.length && !state.series.length) return renderEmpty('libraryList', 'Kitabxana boşdur');
 
     list.innerHTML = [
       ...state.series.map(item => seriesCard(item)),
@@ -207,7 +321,7 @@ const CineVerseAccount = (() => {
     const episodes = Array.isArray(series.episodes) ? series.episodes : [];
     const poster = series.posterUrl
       ? `<img src="${escapeAttr(series.posterUrl)}" alt="" class="content-poster">`
-      : '<div class="content-poster placeholder">Dizi</div>';
+      : '<div class="content-poster placeholder">Serial</div>';
     const description = escapeHTML(series.description || '');
     const episodeRows = episodes.length
       ? episodes.map(episode => `
@@ -217,7 +331,7 @@ const CineVerseAccount = (() => {
               <span>${escapeHTML(episodeMeta(episode))}</span>
             </div>
             <div class="content-actions">
-              <button class="btn btn-primary btn-sm" data-play-content="${escapeAttr(episode.id)}">Odaya yukle</button>
+              <button class="btn btn-primary btn-sm" data-play-content="${escapeAttr(episode.id)}">Otağa yüklə</button>
               <button class="btn btn-secondary btn-sm" data-copy-content="${escapeAttr(episode.id)}">Link</button>
               ${state.user ? `<select class="mini-select" data-list-content="${escapeAttr(episode.id)}">
                 ${watchlistOptions(episode.id)}
@@ -225,7 +339,7 @@ const CineVerseAccount = (() => {
             </div>
           </div>
         `).join('')
-      : '<p class="empty-state">Bolum yok</p>';
+      : '<p class="empty-state">Bölüm yoxdur</p>';
 
     return `
       <details class="content-card series-card">
@@ -233,7 +347,7 @@ const CineVerseAccount = (() => {
           ${poster}
           <div class="content-body">
             <div class="content-title">${escapeHTML(series.title)}</div>
-            <div class="content-meta">Dizi - ${Number(series.episodeCount || episodes.length || 0)} bolum</div>
+            <div class="content-meta">Serial - ${Number(series.episodeCount || episodes.length || 0)} bölüm</div>
             ${description ? `<p class="content-description">${description}</p>` : ''}
           </div>
         </summary>
@@ -248,13 +362,15 @@ const CineVerseAccount = (() => {
     const title = escapeHTML(content.title || content.url);
     const description = escapeHTML(content.description || '');
     const meta = [
-      content.type === 'series' ? 'Dizi' : 'Film',
+      content.type === 'series' ? 'Serial' : 'Film',
       content.season ? `S${content.season}` : '',
-      content.episode ? `E${content.episode}` : ''
+      content.episode ? `E${content.episode}` : '',
+      content.releaseYear || '',
+      content.genre || ''
     ].filter(Boolean).join(' - ');
     const poster = content.posterUrl
       ? `<img src="${escapeAttr(content.posterUrl)}" alt="" class="content-poster">`
-      : `<div class="content-poster placeholder">${content.type === 'series' ? 'Dizi' : 'Film'}</div>`;
+      : `<div class="content-poster placeholder">${content.type === 'series' ? 'Serial' : 'Film'}</div>`;
     const watchlistControl = state.user && !options.noWatchlist
       ? `<select class="mini-select" data-list-content="${escapeAttr(content.id)}">
           ${watchlistOptions(content.id)}
@@ -267,11 +383,12 @@ const CineVerseAccount = (() => {
         <div class="content-body">
           <div class="content-title">${title}</div>
           <div class="content-meta">${escapeHTML(meta || 'Video')}</div>
-          ${content.subtitleUrl ? '<div class="content-meta">Altyazi var</div>' : ''}
+          ${content.subtitleUrl ? '<div class="content-meta">Altyazı var</div>' : ''}
+          ${content.tags?.length ? `<div class="content-meta">${escapeHTML(content.tags.join(' / '))}</div>` : ''}
           ${description ? `<p class="content-description">${description}</p>` : ''}
           <div class="content-url">${escapeHTML(content.url)}</div>
           <div class="content-actions">
-            <button class="btn btn-primary btn-sm" data-play-content="${escapeAttr(content.id)}">Odaya yukle</button>
+            <button class="btn btn-primary btn-sm" data-play-content="${escapeAttr(content.id)}">Otağa yüklə</button>
             <button class="btn btn-secondary btn-sm" data-copy-content="${escapeAttr(content.id)}">Link</button>
             ${watchlistControl}
           </div>
@@ -290,11 +407,11 @@ const CineVerseAccount = (() => {
 
   async function submitContent() {
     const payload = readContentForm();
-    if (!payload.url) return showToast('Link gerekli');
+    if (!payload.url) return showToast('Link lazımdır');
 
     try {
       const data = await api('contents', { method: 'POST', body: JSON.stringify(payload) });
-      showToast(data.message || 'Gonderildi');
+      showToast(data.message || 'Göndərildi');
       clearContentForm();
       await refreshLibrary();
       if (state.user?.role === 'admin') await refreshAdmin();
@@ -313,7 +430,7 @@ const CineVerseAccount = (() => {
       const list = byId('tmdbResults');
       if (!list) return;
       if (data.disabled) return renderEmpty('tmdbResults', 'TMDB anahtari ayarli degil');
-      if (!data.results?.length) return renderEmpty('tmdbResults', 'Sonuc bulunamadi');
+      if (!data.results?.length) return renderEmpty('tmdbResults', 'Nəticə tapılmadı');
 
       list.innerHTML = data.results.map(item => `
         <button class="tmdb-result" data-tmdb-id="${escapeAttr(item.tmdbId)}">
@@ -330,6 +447,10 @@ const CineVerseAccount = (() => {
           setValue('contentPosterUrl', item.posterUrl);
           setValue('contentTmdbId', item.tmdbId);
           setValue('contentType', item.type);
+          setValue('contentGenre', item.genre || '');
+          setValue('contentTags', (item.tags || []).join(', '));
+          setValue('contentReleaseYear', item.releaseYear || item.year || '');
+          setValue('contentRuntime', item.runtimeMinutes || '');
           renderEmpty('tmdbResults', 'Bilgiler forma dolduruldu');
         });
       });
@@ -344,6 +465,7 @@ const CineVerseAccount = (() => {
       return;
     }
     try {
+      renderEmpty('watchlistContent', 'Yüklənir...');
       const data = await api('watchlist');
       state.watchlist = data.items || [];
       renderWatchlist();
@@ -380,7 +502,7 @@ const CineVerseAccount = (() => {
     if (!state.user || !contentId || !status) return;
     try {
       await api('watchlist', { method: 'POST', body: JSON.stringify({ contentId, status }) });
-      showToast('Listem guncellendi');
+      showToast('Siyahın yeniləndi');
       await refreshWatchlist();
       renderContents();
     } catch (err) {
@@ -391,6 +513,7 @@ const CineVerseAccount = (() => {
   async function refreshProgress() {
     if (!state.user) return renderLocalProgress();
     try {
+      renderEmpty('continueContent', 'Yüklənir...');
       const data = await api('progress');
       state.progress = data.items || [];
       renderProgress();
@@ -402,7 +525,7 @@ const CineVerseAccount = (() => {
   function renderProgress() {
     const container = byId('continueContent');
     if (!container) return;
-    if (!state.progress.length) return renderEmpty('continueContent', 'Devam edilecek icerik yok');
+    if (!state.progress.length) return renderEmpty('continueContent', 'Davam ediləcək kontent yoxdur');
 
     container.innerHTML = state.progress.map(item => `
       <div class="compact-row">
@@ -410,7 +533,7 @@ const CineVerseAccount = (() => {
           <strong>${escapeHTML(item.title || item.url)}</strong>
           <span>${formatTime(item.positionSeconds)} kaydedildi</span>
         </div>
-        <button class="btn btn-primary btn-sm" data-progress-play="${escapeAttr(item.id)}">Devam</button>
+        <button class="btn btn-primary btn-sm" data-progress-play="${escapeAttr(item.id)}">Davam</button>
       </div>
     `).join('');
     container.querySelectorAll('[data-progress-play]').forEach(button => {
@@ -436,7 +559,7 @@ const CineVerseAccount = (() => {
       .filter(item => item.id && item.url)
       .slice(-10)
       .reverse();
-    if (!rows.length) return renderEmpty('continueContent', 'Devam edilecek icerik yok');
+    if (!rows.length) return renderEmpty('continueContent', 'Davam ediləcək kontent yoxdur');
 
     container.innerHTML = rows.map(item => `
       <div class="compact-row">
@@ -444,7 +567,7 @@ const CineVerseAccount = (() => {
           <strong>${escapeHTML(item.title || item.url)}</strong>
           <span>${formatTime(item.positionSeconds)} bu cihazda</span>
         </div>
-        <button class="btn btn-primary btn-sm" data-local-progress="${escapeAttr(item.id)}">Devam</button>
+        <button class="btn btn-primary btn-sm" data-local-progress="${escapeAttr(item.id)}">Davam</button>
       </div>
     `).join('');
     container.querySelectorAll('[data-local-progress]').forEach(button => {
@@ -493,17 +616,156 @@ const CineVerseAccount = (() => {
   }
 
   async function refreshAdmin() {
-    if (state.user?.role !== 'admin') return;
+    if (!['admin', 'moderator'].includes(state.user?.role)) return;
     try {
-      const [users, submissions] = await Promise.all([
-        api('admin/users'),
-        api('admin/submissions')
+      const [users, submissions, stats] = await Promise.all([
+        state.user?.role === 'admin' ? api('admin/users') : Promise.resolve({ users: [] }),
+        api('admin/submissions'),
+        state.user?.role === 'admin' ? api('admin/stats') : Promise.resolve({ stats: {}, recentContents: [] })
       ]);
-      renderUsers(users.users || []);
+      if (state.user?.role === 'admin') {
+        renderAdminStats(stats);
+        renderUsers(users.users || []);
+      }
       renderSubmissions(submissions.submissions || []);
     } catch (err) {
       showToast(err.message);
     }
+  }
+
+  function renderAdminStats(data) {
+    const stats = data?.stats || {};
+    const grid = byId('adminStatsGrid');
+    if (grid) {
+      grid.innerHTML = [
+        statCard('Istifadeci', stats.users || 0),
+        statCard('Kontent', stats.approvedContents || 0),
+        statCard('Pending', stats.pendingSubmissions || 0),
+        statCard('Public oda', stats.activePublicRooms || 0)
+      ].join('');
+    }
+
+    const recent = byId('adminRecentContent');
+    if (!recent) return;
+    const rows = data?.recentContents || [];
+    recent.innerHTML = rows.length
+      ? rows.map(item => `
+          <div class="compact-row">
+            <div>
+              <strong>${escapeHTML(item.title || item.url)}</strong>
+              <span>${escapeHTML(item.type || 'video')}</span>
+            </div>
+          </div>
+        `).join('')
+      : '<p class="empty-state">Yeni kontent yoxdur</p>';
+  }
+
+  function bindProfile() {
+    on('profileSaveBtn', 'click', saveProfile);
+    document.querySelector('.sidebar-tab[data-tab="profile"]')?.addEventListener('click', refreshProfile);
+  }
+
+  async function refreshProfile() {
+    if (!state.user) return;
+    try {
+      renderEmpty('profileStats', 'Yüklənir...');
+      const data = await api('profile');
+      state.profile = data;
+      renderProfile(data);
+      await refreshMySubmissions();
+    } catch (err) {
+      renderEmpty('profileStats', err.message);
+    }
+  }
+
+  async function saveProfile() {
+    if (!state.user) return showToast('Profil üçün daxil olmalısan');
+    try {
+      const data = await api('profile', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: value('profileDisplayName'),
+          bio: value('profileBio')
+        })
+      });
+      state.profile = data;
+      renderProfile(data);
+      showToast('Profil yeniləndi');
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  function renderProfile(data) {
+    const profile = data.profile || {};
+    const stats = data.stats || {};
+    setValue('profileDisplayName', profile.displayName || profile.username || '');
+    setValue('profileBio', profile.bio || '');
+    const grid = byId('profileStats');
+    if (grid) {
+      grid.innerHTML = [
+        statCard('Listem', stats.watchlistCount || 0),
+        statCard('Davam', stats.progressCount || 0),
+        statCard('Izleme', formatTime(stats.watchedSeconds || 0))
+      ].join('');
+    }
+
+    const recent = byId('profileRecentList');
+    if (!recent) return;
+    const rows = data.recent || [];
+    recent.innerHTML = rows.length
+      ? rows.map(item => `
+          <div class="compact-row">
+            <div>
+              <strong>${escapeHTML(item.title || item.url)}</strong>
+              <span>${formatTime(item.positionSeconds || 0)} kaydedildi</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-profile-play="${escapeAttr(item.id)}">Ac</button>
+          </div>
+        `).join('')
+      : '<p class="empty-state">Son baxilan yoxdur</p>';
+    recent.querySelectorAll('[data-profile-play]').forEach(button => {
+      button.addEventListener('click', () => {
+        const content = rows.find(item => item.id === button.dataset.profilePlay);
+        if (content) playContent(content, Number(content.positionSeconds || 0));
+      });
+    });
+  }
+
+  async function refreshMySubmissions() {
+    if (!state.user) return renderEmpty('mySubmissionsList', '');
+    try {
+      const data = await api('submissions/mine');
+      state.mySubmissions = data.submissions || [];
+      renderMySubmissions();
+    } catch (err) {
+      renderEmpty('mySubmissionsList', err.message);
+    }
+  }
+
+  function renderMySubmissions() {
+    const list = byId('mySubmissionsList');
+    if (!list) return;
+    if (!state.mySubmissions.length) return renderEmpty('mySubmissionsList', 'Təklif yoxdur');
+    const labels = { pending: 'Gözləyir', approved: 'Təsdiqləndi', rejected: 'Rədd edildi' };
+    list.innerHTML = state.mySubmissions.map(item => `
+      <div class="compact-row">
+        <div>
+          <strong>${escapeHTML(item.title || item.url)}</strong>
+          <span>${escapeHTML(labels[item.status] || item.status)}</span>
+          ${item.moderationNote ? `<span>${escapeHTML(item.moderationNote)}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function statCard(label, valueText) {
+    return `
+      <div class="profile-stat-card">
+        <strong>${escapeHTML(valueText)}</strong>
+        <span>${escapeHTML(label)}</span>
+      </div>
+    `;
   }
 
   async function createAdminUser() {
@@ -512,13 +774,13 @@ const CineVerseAccount = (() => {
       password: value('adminNewPassword'),
       role: value('adminNewRole') || 'user'
     };
-    if (!payload.username || !payload.password) return showToast('Kullanici adi ve sifre gerekli');
+    if (!payload.username || !payload.password) return showToast('İstifadəçi adı və şifrə lazımdır');
 
     try {
       await api('admin/users', { method: 'POST', body: JSON.stringify(payload) });
       setValue('adminNewUsername', '');
       setValue('adminNewPassword', '');
-      showToast('Kullanici olusturuldu');
+      showToast('İstifadəçi yaradıldı');
       await refreshAdmin();
     } catch (err) {
       showToast(err.message);
@@ -528,7 +790,7 @@ const CineVerseAccount = (() => {
   function renderUsers(users) {
     const list = byId('adminUsersList');
     if (!list) return;
-    if (!users.length) return renderEmpty('adminUsersList', 'Kullanici yok');
+    if (!users.length) return renderEmpty('adminUsersList', 'İstifadəçi yoxdur');
 
     list.innerHTML = users.map(user => `
       <div class="admin-row">
@@ -538,6 +800,7 @@ const CineVerseAccount = (() => {
         </div>
         <select class="mini-select" data-user-role="${escapeAttr(user.id)}">
           <option value="user" ${user.role === 'user' ? 'selected' : ''}>user</option>
+          <option value="moderator" ${user.role === 'moderator' ? 'selected' : ''}>moderator</option>
           <option value="uploader" ${user.role === 'uploader' ? 'selected' : ''}>uploader</option>
           <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>admin</option>
         </select>
@@ -562,19 +825,23 @@ const CineVerseAccount = (() => {
   function renderSubmissions(submissions) {
     const list = byId('adminSubmissionsList');
     if (!list) return;
-    if (!submissions.length) return renderEmpty('adminSubmissionsList', 'Bekleyen link yok');
+    if (!submissions.length) return renderEmpty('adminSubmissionsList', 'Gözləyən link yoxdur');
 
     list.innerHTML = submissions.map(item => `
       <div class="admin-row stacked">
         <div>
           <strong>${escapeHTML(item.title || item.url)}</strong>
-          <span>${escapeHTML(item.submittedByName || 'Kullanici')} tarafindan</span>
+          <span>${escapeHTML(item.submittedByName || 'İstifadəçi')} tərəfindən</span>
+          ${item.moderationNote ? `<span>Qeyd: ${escapeHTML(item.moderationNote)}</span>` : ''}
+          <span>Yoxlama: ${escapeHTML(item.checkStatus || 'pending')}</span>
           <small>${escapeHTML(item.url)}</small>
         </div>
         <div class="content-actions">
           <button class="btn btn-secondary btn-sm" data-copy-submission="${escapeAttr(item.id)}">Link</button>
-          <button class="btn btn-primary btn-sm" data-approve="${escapeAttr(item.id)}">Onayla</button>
-          <button class="btn btn-secondary btn-sm" data-reject="${escapeAttr(item.id)}">Reddet</button>
+          <button class="btn btn-secondary btn-sm" data-check-submission="${escapeAttr(item.id)}">Yoxla</button>
+          <button class="btn btn-secondary btn-sm" data-note-submission="${escapeAttr(item.id)}">Qeyd</button>
+          <button class="btn btn-primary btn-sm" data-approve="${escapeAttr(item.id)}">Təsdiqlə</button>
+          <button class="btn btn-secondary btn-sm" data-reject="${escapeAttr(item.id)}">Rədd et</button>
         </div>
       </div>
     `).join('');
@@ -590,13 +857,50 @@ const CineVerseAccount = (() => {
     list.querySelectorAll('[data-reject]').forEach(button => {
       button.addEventListener('click', () => moderate(button.dataset.reject, 'reject'));
     });
+    list.querySelectorAll('[data-check-submission]').forEach(button => {
+      button.addEventListener('click', () => checkSubmission(button.dataset.checkSubmission));
+    });
+    list.querySelectorAll('[data-note-submission]').forEach(button => {
+      button.addEventListener('click', () => addModerationNote(button.dataset.noteSubmission));
+    });
   }
 
   async function moderate(id, action) {
     try {
-      await api(`admin/submissions/${id}/${action}`, { method: 'POST' });
-      showToast(action === 'approve' ? 'Link onaylandi' : 'Link reddedildi');
+      const reason = action === 'reject' ? (prompt('Rədd səbəbi') || '') : '';
+      await api(`admin/submissions/${id}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+      showToast(action === 'approve' ? 'Link təsdiqləndi' : 'Link rədd edildi');
       await Promise.all([refreshAdmin(), refreshLibrary()]);
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function checkSubmission(id) {
+    try {
+      showToast('Linklər yoxlanılır...');
+      const data = await api(`admin/contents/${id}/check`, { method: 'POST' });
+      const failed = (data.checks || []).filter(item => item.status === 'failed').length;
+      showToast(failed ? `${failed} yoxlama uğursuz oldu` : 'Link yoxlaması tamamlandı');
+      await refreshAdmin();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function addModerationNote(id) {
+    const note = prompt('Moderasiya qeydi');
+    if (!note) return;
+    try {
+      await api(`contents/${id}/moderation-notes`, {
+        method: 'POST',
+        body: JSON.stringify({ note })
+      });
+      showToast('Qeyd saxlanıldı');
+      await refreshAdmin();
     } catch (err) {
       showToast(err.message);
     }
@@ -611,7 +915,7 @@ const CineVerseAccount = (() => {
     if (positionSeconds > 0) {
       setTimeout(() => PlayerController?.applySync('seek', positionSeconds), 1200);
     }
-    showToast('Odaya yukleniyor');
+    showToast('Otağa yüklənir');
   }
 
   function loadAdminRoomContent() {
@@ -699,15 +1003,19 @@ const CineVerseAccount = (() => {
       description: value('contentDescription'),
       posterUrl: value('contentPosterUrl'),
       subtitleUrl: urlValue('contentSubtitleUrl'),
+      genre: value('contentGenre'),
+      tags: value('contentTags'),
       type: value('contentType') || 'movie',
       season: value('contentSeason'),
       episode: value('contentEpisode'),
+      releaseYear: value('contentReleaseYear'),
+      runtimeMinutes: value('contentRuntime'),
       tmdbId: value('contentTmdbId')
     };
   }
 
   function clearContentForm() {
-    ['contentUrl', 'contentTitle', 'contentDescription', 'contentPosterUrl', 'contentSubtitleUrl', 'contentSeason', 'contentEpisode', 'contentTmdbId'].forEach(id => setValue(id, ''));
+    ['contentUrl', 'contentTitle', 'contentDescription', 'contentPosterUrl', 'contentSubtitleUrl', 'contentGenre', 'contentTags', 'contentSeason', 'contentEpisode', 'contentReleaseYear', 'contentRuntime', 'contentTmdbId'].forEach(id => setValue(id, ''));
     renderEmpty('tmdbResults', '');
   }
 
@@ -794,6 +1102,7 @@ const CineVerseAccount = (() => {
     getSelectedForUrl,
     prepareManualLoad,
     setActiveContent,
+    addLocalNotification,
     refreshLibrary,
     refreshProgress
   };

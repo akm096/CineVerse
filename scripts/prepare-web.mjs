@@ -12,6 +12,10 @@ const copyItems = [
   ['css', 'css'],
   ['js', 'js'],
   ['functions', 'functions'],
+  ['icons', 'icons'],
+  ['manifest.webmanifest', 'manifest.webmanifest'],
+  ['sw.js', 'sw.js'],
+  ['_headers', '_headers'],
   ['gdrive-worker.js', 'gdrive-worker.js'],
 ];
 

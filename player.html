@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CineVerse">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/cineverse-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/cineverse-192.png">
   <title>CineVerse — Oynatıcı</title>
   <meta name="description" content="CineVerse video oynatıcı — senkron izle, sohbet et, altyazı yükle.">
   <link rel="stylesheet" href="css/style.css">
@@ -11,28 +19,28 @@
   <!-- PeerJS for P2P rooms -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
-<body>
+<body class="player-page">
 
   <!-- Welcome Modal -->
   <div class="modal-backdrop" id="welcomeModal">
     <div class="modal">
-      <h2>🎬 CineVerse'e Hoş Geldin</h2>
-      <p>İzlemeye başlamak için adını yaz ve bir oda oluştur veya mevcut bir odaya katıl.</p>
+      <h2>CineVerse-&#601; xo&#351; g&#601;ldin</h2>
+      <p>&#304;zl&#601;m&#601;y&#601; ba&#351;lamaq &#252;&#231;&#252;n ad&#305;n&#305; yaz v&#601; otaq yarat v&#601; ya m&#246;vcud ota&#287;a qo&#351;ul.</p>
       <div class="account-strip">
-        <span id="welcomeAuthStatus">Hesapsiz devam edebilirsin</span>
-        <button class="btn btn-secondary btn-sm" id="welcomeLoginBtn" type="button">Giris yap</button>
+        <span id="welcomeAuthStatus">Hesabs&#305;z davam ed&#601; bil&#601;rs&#601;n</span>
+        <button class="btn btn-secondary btn-sm" id="welcomeLoginBtn" type="button">Daxil ol</button>
       </div>
       <div class="modal-field" id="usernameField">
-        <label for="usernameInput">Kullanıcı Adı</label>
-        <input type="text" id="usernameInput" class="input-field" placeholder="Adını yaz..." maxlength="20">
+        <label for="usernameInput">&#304;stifad&#601;&#231;i ad&#305;</label>
+        <input type="text" id="usernameInput" class="input-field" placeholder="Ad&#305;n&#305; yaz..." maxlength="20">
       </div>
       <div class="modal-field" id="joinRoomField" style="display:none">
-        <label for="joinRoomInput">Oda Kodu</label>
-        <input type="text" id="joinRoomInput" class="input-field" placeholder="Oda kodunu yapıştır...">
+        <label for="joinRoomInput">Otaq kodu</label>
+        <input type="text" id="joinRoomInput" class="input-field" placeholder="Otaq kodunu yaz...">
       </div>
       <div class="modal-actions">
-        <button class="btn btn-primary" id="createRoomBtn">🚀 Oda Oluştur</button>
-        <button class="btn btn-secondary" id="joinRoomBtn">🔗 Odaya Katıl</button>
+        <button class="btn btn-primary" id="createRoomBtn">Otaq yarat</button>
+        <button class="btn btn-secondary" id="joinRoomBtn">Ota&#287;a qo&#351;ul</button>
       </div>
     </div>
   </div>
@@ -43,16 +51,16 @@
       <h2>CineVerse Hesabi</h2>
       <p>Kalici liste, devam et ve link onerileri icin giris yap.</p>
       <div class="modal-field">
-        <label for="loginUsername">Kullanici adi</label>
+        <label for="loginUsername">İstifadəçi adı</label>
         <input type="text" id="loginUsername" class="input-field" autocomplete="username">
       </div>
       <div class="modal-field">
-        <label for="loginPassword">Sifre</label>
+        <label for="loginPassword">Şifrə</label>
         <input type="password" id="loginPassword" class="input-field" autocomplete="current-password">
       </div>
       <div class="modal-actions">
-        <button class="btn btn-primary" id="loginSubmitBtn" type="button">Giris yap</button>
-        <button class="btn btn-secondary" id="closeLoginBtn" type="button">Kapat</button>
+        <button class="btn btn-primary" id="loginSubmitBtn" type="button">Daxil ol</button>
+        <button class="btn btn-secondary" id="closeLoginBtn" type="button">Bağla</button>
       </div>
     </div>
   </div>
@@ -67,10 +75,11 @@
       <div class="navbar-actions">
         <div class="theme-toggle" id="themeToggle" title="Tema Değiştir"></div>
         <span id="authStatus" class="auth-status">Misafir</span>
-        <a href="library-admin.html" class="btn btn-secondary btn-sm" id="libraryAdminLink" hidden>Yonetim</a>
+        <button class="btn btn-secondary btn-sm notification-btn" id="notificationBtn" type="button">Bildiriş <span id="notificationBadge" hidden>0</span></button>
+        <a href="library-admin.html" class="btn btn-secondary btn-sm" id="libraryAdminLink" hidden>İdarə</a>
         <button class="btn btn-secondary btn-sm" id="openRoomBtn" type="button" hidden>Oda</button>
-        <button class="btn btn-secondary btn-sm" id="openLoginBtn" type="button">Giris</button>
-        <button class="btn btn-secondary btn-sm" id="logoutBtn" type="button" hidden>Cikis</button>
+        <button class="btn btn-secondary btn-sm" id="openLoginBtn" type="button">Giriş</button>
+        <button class="btn btn-secondary btn-sm" id="logoutBtn" type="button" hidden>Çıxış</button>
         <span id="currentUser" style="font-size:.85rem;font-weight:600;"></span>
       </div>
     </div>
@@ -90,15 +99,15 @@
 
       <!-- Controls Bar -->
       <div class="controls-bar">
-        <button id="rewind5Btn" class="mobile-seek-btn" title="5 saniye geri" aria-label="5 saniye geri">-5</button>
+        <button id="rewind10Btn" class="mobile-seek-btn" title="10 saniyə geri" aria-label="10 saniyə geri">-10</button>
         <button id="playPauseBtn" title="Oynat / Duraklat">▶️</button>
-        <button id="forward10Btn" class="mobile-seek-btn" title="10 saniye ileri" aria-label="10 saniye ileri">+10</button>
+        <button id="forward10Btn" class="mobile-seek-btn" title="10 saniyə irəli" aria-label="10 saniyə irəli">+10</button>
         <div class="progress-bar" id="progressBar">
           <div class="progress-bar-fill" id="progressFill"></div>
         </div>
         <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
         <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.05" value="1" title="Ses">
-        <button id="muteBtn" title="Sesi Kapat/Aç">🔊</button>
+        <button id="muteBtn" title="Səsi bağla/aç">🔊</button>
         <select class="speed-select" id="speedSelect" title="Oynatma Hızı">
           <option value="0.25">0.25x</option>
           <option value="0.5">0.5x</option>
@@ -124,13 +133,51 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-tabs">
-        <button class="sidebar-tab active" data-tab="chat">💬 Sohbet</button>
+        <button class="sidebar-tab active" data-tab="chat">Söhbət</button>
         <button class="sidebar-tab" data-tab="room">👥 Oda</button>
-        <button class="sidebar-tab" data-tab="library">Kutuphane</button>
+        <button class="sidebar-tab" data-tab="library">Kitabxana</button>
         <button class="sidebar-tab" data-tab="watchlist">Listem</button>
-        <button class="sidebar-tab" data-tab="continue">Devam</button>
+        <button class="sidebar-tab" data-tab="continue">Davam</button>
+        <button class="sidebar-tab" data-tab="profile">Profil</button>
         <button class="sidebar-tab" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
+        <button class="sidebar-tab" data-tab="banned" id="bannedTabBtn" hidden>Banlananlar</button>
         <button class="sidebar-tab" data-tab="subtitle">📝 Altyazı</button>
+        <button class="sidebar-tab mobile-more-tab" id="mobileMoreBtn" type="button" aria-expanded="false">⋯ Daha çox</button>
+      </div>
+      <div class="mobile-more-menu" id="mobileMoreMenu" hidden>
+        <button type="button" data-mobile-tab="library">Kitabxana</button>
+        <button type="button" data-mobile-tab="watchlist">Listem</button>
+        <button type="button" data-mobile-tab="continue">Davam</button>
+        <button type="button" data-mobile-tab="profile">Profil</button>
+        <button type="button" data-mobile-tab="subtitle">Altyazı</button>
+        <button type="button" data-mobile-tab="admin" id="mobileAdminMenuBtn" hidden>Admin</button>
+        <button type="button" data-mobile-tab="banned" id="mobileBannedMenuBtn" hidden>Banlananlar</button>
+        <button type="button" data-mobile-source>Video URL</button>
+      </div>
+
+      <div class="fullscreen-chat-header">
+        <strong>Söhbət</strong>
+        <div class="fullscreen-chat-header-actions">
+          <button type="button" id="fullscreenChatSettingsBtn" aria-label="Söhbət ayarları">⚙</button>
+          <button type="button" id="fullscreenChatCloseBtn" aria-label="Söhbəti bağla">×</button>
+        </div>
+      </div>
+      <div class="fullscreen-chat-settings" id="fullscreenChatSettings" hidden>
+        <label>
+          Görünüş
+          <select id="fullscreenChatMode">
+            <option value="overlay">Video üstü</option>
+            <option value="side">Yan-yana</option>
+          </select>
+        </label>
+        <label>
+          Panel eni <span id="fullscreenChatWidthValue">40%</span>
+          <input type="range" id="fullscreenChatWidth" min="25" max="70" value="40">
+        </label>
+        <label>
+          Yazı ölçüsü <span id="fullscreenChatFontValue">100%</span>
+          <input type="range" id="fullscreenChatFont" min="80" max="150" value="100">
+        </label>
       </div>
 
       <!-- Chat Tab -->
@@ -160,15 +207,25 @@
       <div class="tab-panel" id="tab-library">
         <div class="library-panel">
           <div class="settings-group">
-            <h4>Video Kutuphanesi</h4>
+            <h4>Video Kitabxanası</h4>
+            <div id="notificationPanel" class="notification-panel" hidden>
+              <div class="room-section-header">
+                <strong>Bildirişlər</strong>
+                <button class="btn btn-secondary btn-sm" id="markNotificationsReadBtn" type="button">Hamısını oxu</button>
+              </div>
+              <div id="notificationList" class="compact-list"></div>
+            </div>
             <div class="library-toolbar">
               <input type="text" id="librarySearchInput" class="input-field" placeholder="Ara...">
               <select id="libraryTypeFilter" class="mini-select">
-                <option value="">Hepsi</option>
+                <option value="">Hamısı</option>
                 <option value="movie">Film</option>
-                <option value="series">Dizi</option>
+                <option value="series">Serial</option>
               </select>
-              <button class="btn btn-secondary btn-sm" id="libraryRefreshBtn" type="button">Yenile</button>
+              <select id="libraryTagFilter" class="mini-select">
+                <option value="">Tag</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" id="libraryRefreshBtn" type="button">Yenilə</button>
             </div>
           </div>
 
@@ -176,27 +233,31 @@
 
           <p id="librarySubmitLoginHint" class="empty-state">Kalici kutuphaneye link onermek icin giris yap.</p>
           <div id="librarySubmitForm" class="settings-group" hidden>
-            <h4>Link Ekle / Oner</h4>
+            <h4>Link Əlavə Et / Təklif Et</h4>
             <input type="text" id="contentUrl" class="input-field" placeholder="Video linki (zorunlu)">
             <input type="text" id="contentTitle" class="input-field" placeholder="Baslik (opsiyonel)">
             <textarea id="contentDescription" class="input-field" placeholder="Hakkinda (opsiyonel)" rows="3"></textarea>
             <input type="text" id="contentPosterUrl" class="input-field" placeholder="Poster URL (opsiyonel)">
-            <input type="text" id="contentSubtitleUrl" class="input-field" placeholder="Altyazi URL (opsiyonel)">
+            <input type="text" id="contentSubtitleUrl" class="input-field" placeholder="Altyazı URL (istəyə bağlı)">
+            <input type="text" id="contentGenre" class="input-field" placeholder="Janr (opsiyonel)">
+            <input type="text" id="contentTags" class="input-field" placeholder="Tag-lar (vergüllə)">
             <input type="hidden" id="contentTmdbId">
             <div class="library-toolbar">
               <select id="contentType" class="mini-select">
                 <option value="movie">Film</option>
-                <option value="series">Dizi</option>
+                <option value="series">Serial</option>
               </select>
               <input type="number" id="contentSeason" class="input-field compact-input" placeholder="Sezon">
-              <input type="number" id="contentEpisode" class="input-field compact-input" placeholder="Bolum">
+              <input type="number" id="contentEpisode" class="input-field compact-input" placeholder="Bölüm">
+              <input type="number" id="contentReleaseYear" class="input-field compact-input" placeholder="Il">
+              <input type="number" id="contentRuntime" class="input-field compact-input" placeholder="Dk">
             </div>
             <div class="library-toolbar">
               <input type="text" id="tmdbSearchInput" class="input-field" placeholder="TMDB ara (opsiyonel)">
               <button class="btn btn-secondary btn-sm" id="tmdbSearchBtn" type="button">TMDB</button>
             </div>
             <div id="tmdbResults" class="tmdb-results"></div>
-            <button class="btn btn-primary btn-sm wide-btn" id="contentSubmitBtn" type="button">Gonder</button>
+            <button class="btn btn-primary btn-sm wide-btn" id="contentSubmitBtn" type="button">Göndər</button>
           </div>
         </div>
       </div>
@@ -204,7 +265,7 @@
       <!-- Watchlist Tab -->
       <div class="tab-panel" id="tab-watchlist">
         <div class="library-panel">
-          <p id="watchlistLoginHint" class="empty-state">Listem icin giris yapmalisin.</p>
+          <p id="watchlistLoginHint" class="empty-state">Listən üçün daxil olmalısan.</p>
           <div id="watchlistContent" class="compact-list" hidden></div>
         </div>
       </div>
@@ -212,40 +273,70 @@
       <!-- Continue Tab -->
       <div class="tab-panel" id="tab-continue">
         <div class="library-panel">
-          <p id="continueLoginHint" class="empty-state">Giris yaparsan kaldigin yer cihazlar arasinda saklanir. Misafir olarak bu cihazda gecici kayit tutulur.</p>
+          <p id="continueLoginHint" class="empty-state">Daxil olsan qaldığın yer cihazlar arasında saxlanar. Qonaq kimi bu cihazda müvəqqəti qeyd tutulur.</p>
           <div id="continueContent" class="compact-list"></div>
+        </div>
+      </div>
+
+      <!-- Profile Tab -->
+      <div class="tab-panel" id="tab-profile">
+        <div class="library-panel">
+          <p id="profileLoginHint" class="empty-state">Profil üçün daxil olmalısan.</p>
+          <div id="profileContent" hidden>
+            <div class="settings-group">
+              <h4>Profil</h4>
+              <input type="text" id="profileDisplayName" class="input-field" placeholder="Gorunen ad">
+              <textarea id="profileBio" class="input-field" rows="3" placeholder="Qisa bio"></textarea>
+              <button class="btn btn-primary btn-sm wide-btn" id="profileSaveBtn" type="button">Kaydet</button>
+            </div>
+            <div class="profile-stats" id="profileStats"></div>
+            <div class="settings-group">
+              <h4>Son baxilanlar</h4>
+              <div id="profileRecentList" class="compact-list"></div>
+            </div>
+            <div class="settings-group">
+              <h4>Təkliflərim</h4>
+              <div id="mySubmissionsList" class="compact-list"></div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Admin Tab -->
       <div class="tab-panel" id="tab-admin">
         <div class="library-panel">
-          <p id="adminOnlyHint" class="empty-state">Admin paneli icin admin hesabi gerekli.</p>
+          <p id="adminOnlyHint" class="empty-state">Admin paneli üçün səlahiyyət lazımdır.</p>
           <div id="adminPanelContent" hidden>
-            <div class="settings-group">
-              <h4>Kutuphane Yonetimi</h4>
-              <a class="btn btn-primary btn-sm wide-btn" href="library-admin.html">Yonetim sayfasini ac</a>
+            <div class="settings-group" id="adminDashboardSection">
+              <h4>Dashboard</h4>
+              <div id="adminStatsGrid" class="profile-stats"></div>
+              <div id="adminRecentContent" class="compact-list"></div>
             </div>
-            <div class="settings-group">
-              <h4>Kullanici Olustur</h4>
-              <input type="text" id="adminNewUsername" class="input-field" placeholder="Kullanici adi">
-              <input type="password" id="adminNewPassword" class="input-field" placeholder="Sifre">
+            <div class="settings-group" id="adminLibrarySection">
+              <h4>Kitabxana İdarəsi</h4>
+              <a class="btn btn-primary btn-sm wide-btn" href="library-admin.html">İdarə səhifəsini aç</a>
+            </div>
+            <div class="settings-group" id="adminCreateUserSection">
+              <h4>İstifadəçi Yarat</h4>
+              <input type="text" id="adminNewUsername" class="input-field" placeholder="İstifadəçi adı">
+              <input type="password" id="adminNewPassword" class="input-field" placeholder="Şifrə">
               <div class="library-toolbar">
                 <select id="adminNewRole" class="mini-select">
                   <option value="user">user</option>
+                  <option value="moderator">moderator</option>
                   <option value="uploader">uploader</option>
                   <option value="admin">admin</option>
                 </select>
                 <button class="btn btn-primary btn-sm" id="adminCreateUserBtn" type="button">Olustur</button>
-                <button class="btn btn-secondary btn-sm" id="adminRefreshBtn" type="button">Yenile</button>
+                <button class="btn btn-secondary btn-sm" id="adminRefreshBtn" type="button">Yenilə</button>
               </div>
             </div>
-            <div class="settings-group">
+            <div class="settings-group" id="adminUsersSection">
               <h4>Bekleyen Linkler</h4>
               <div id="adminSubmissionsList" class="admin-list"></div>
             </div>
             <div class="settings-group">
-              <h4>Kullanicilar</h4>
+              <h4>İstifadəçilər</h4>
               <div id="adminUsersList" class="admin-list"></div>
             </div>
           </div>
@@ -257,7 +348,7 @@
         <div class="room-panel">
           <div class="room-info" id="roomStartPanel">
             <label>Oda</label>
-            <button class="btn btn-primary btn-sm" id="roomStartBtn" type="button">Oda olustur / Odaya katil</button>
+            <button class="btn btn-primary btn-sm" id="roomStartBtn" type="button">Otaq yarat / Otağa qoşul</button>
           </div>
           <div class="room-info">
             <label>Oda Bağlantısı</label>
@@ -266,8 +357,15 @@
               <button class="btn btn-primary btn-sm" id="copyLinkBtn" title="Kopyala">📋</button>
             </div>
           </div>
+          <div class="room-actions" id="roomActions" hidden>
+            <button class="btn btn-secondary btn-sm" id="leaveRoomBtn" type="button">Otaqdan çıx</button>
+            <button class="btn btn-danger btn-sm" id="deleteRoomBtn" type="button" hidden>Otağı sil</button>
+          </div>
           <div class="room-info" style="margin-top:12px;" id="roomSettingsPanel">
             <label>⚙️ Oda Ayarları</label>
+            <input type="text" id="roomNameInput" class="input-field" placeholder="Otaq adı (public siyahıda görünür)">
+            <textarea id="roomDescriptionInput" class="input-field" rows="2" placeholder="Qisa oda aciklamasi"></textarea>
+            <button class="btn btn-secondary btn-sm" id="saveRoomDetailsBtn" type="button">Otaq məlumatını saxla</button>
             <div class="setting-row" style="margin-top:8px;">
               <label>Sadece host video değiştirebilir</label>
               <div class="toggle-switch active" id="hostOnlyVideo"></div>
@@ -277,7 +375,7 @@
               <div class="toggle-switch" id="hostOnlyPlayback"></div>
             </div>
             <div class="setting-row">
-              <label>Oda public gosterilsin</label>
+              <label>Otaq public görünsün</label>
               <div class="toggle-switch" id="roomVisibilityToggle"></div>
             </div>
             <div class="setting-row">
@@ -288,19 +386,25 @@
           <div class="room-info" style="margin-top:12px;">
             <div class="room-section-header">
               <label>Aktiv odalar</label>
-              <button class="btn btn-secondary btn-sm" id="refreshRoomsBtn" type="button">Yenile</button>
+              <button class="btn btn-secondary btn-sm" id="refreshRoomsBtn" type="button">Yenilə</button>
             </div>
             <div id="activeRoomsList" class="active-rooms-list">
-              <p class="empty-state">Public odalar burada gorunur.</p>
+              <p class="empty-state">Public otaqlar burada görünür.</p>
             </div>
           </div>
           <div class="room-info" style="margin-top:12px;">
             <label>Oda Üyeleri</label>
             <ul class="user-list" id="userList"></ul>
           </div>
+          <div class="room-info" style="margin-top:12px;">
+            <label>Son qoşulduğun otaqlar</label>
+            <div id="recentRoomsList" class="active-rooms-list">
+              <p class="empty-state">Hələ otaq tarixçəsi yoxdur.</p>
+            </div>
+          </div>
           <div class="room-info app-version-box" style="margin-top:12px;">
             <label>Versiya</label>
-            <span id="appVersion">v1.2.6</span>
+            <span id="appVersion">v1.3.7</span>
           </div>
         </div>
       </div>
@@ -309,11 +413,11 @@
       <div class="tab-panel" id="tab-subtitle">
         <div class="subtitle-panel">
           <div class="settings-group">
-            <h4>Altyazi Modu</h4>
+            <h4>Altyazı Modu</h4>
             <div class="setting-row">
               <label>Secim</label>
               <select id="subtitleSyncMode">
-                <option value="personal" selected>Kisiye ozel</option>
+                <option value="personal" selected>Şəxsi</option>
                 <option value="shared">Host ile ortak</option>
               </select>
             </div>
@@ -374,17 +478,33 @@
           <button class="btn btn-secondary btn-sm" id="clearSubBtn" style="width:100%;justify-content:center;">🗑️ Altyazıyı Temizle</button>
         </div>
       </div>
+      
+      <!-- Banned Tab -->
+      <div class="tab-panel" id="tab-banned">
+        <div class="room-panel">
+          <div class="room-info">
+            <label>🚫 Banlananlar</label>
+            <ul class="user-list" id="bannedUserList"></ul>
+          </div>
+        </div>
+      </div>
     </aside>
+
+    <button class="fullscreen-chat-toggle" id="fullscreenChatToggle" type="button" aria-label="Tam ekranda söhbəti aç" aria-expanded="false">
+      💬
+      <span id="fullscreenChatBadge" hidden>0</span>
+    </button>
   </div>
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <script src="js/subtitles.js?v=1.2.6"></script>
-  <script src="js/player.js?v=1.2.8"></script>
-  <script src="js/chat.js?v=1.2.8"></script>
-  <script src="js/account.js?v=1.2.6"></script>
-  <script src="js/app.js?v=1.2.6"></script>
-  <script src="js/cineverse-bridge.js?v=1.2.8"></script>
+  <script src="js/subtitles.js?v=1.3.7"></script>
+  <script src="js/player.js?v=1.3.7"></script>
+  <script src="js/chat.js?v=1.3.7"></script>
+  <script src="js/account.js?v=1.3.7"></script>
+  <script src="js/app.js?v=1.3.7"></script>
+  <script src="js/cineverse-bridge.js?v=1.3.7"></script>
+  <script src="js/pwa.js?v=1.3.7"></script>
 </body>
 </html>
