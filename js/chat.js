@@ -131,6 +131,9 @@ const ChatModule = (() => {
     sendTypingState(false);
     const reply = selectedReply;
     clearReply();
+    window.dispatchEvent(new CustomEvent('cineverse:chat-send', {
+      detail: { text }
+    }));
     if (sendCallback) sendCallback(text, reply, createMessageId());
   }
 

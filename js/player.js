@@ -798,6 +798,13 @@ const PlayerController = (() => {
 
   function emitSync(action, time) {
     if (onSyncCallback) onSyncCallback(action, time);
+    window.dispatchEvent(new CustomEvent('cineverse:player-sync', {
+      detail: {
+        action,
+        time,
+        isPlaying: action === 'play' ? true : action === 'pause' ? false : !isPaused()
+      }
+    }));
   }
 
   function onSync(cb) { onSyncCallback = cb; }
